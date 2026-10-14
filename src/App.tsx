@@ -20,10 +20,15 @@ import { GlobalShortcutsModal } from './components/common/GlobalShortcutsModal';
 import { CommandPaletteModal } from './components/common/CommandPaletteModal';
 import { LeavePosWarningModal } from './components/common/LeavePosWarningModal';
 import { ToastContainer } from './components/common/ToastContainer';
+import { LoginView } from './components/auth/LoginView';
 import { OrderItem } from './types';
 import { Database } from './services/db';
+import { toast } from './services/toast';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return Database.isSessionAuthenticated();
+  });
   const [currentModule, setCurrentModule] = useState<string>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [sidebarMinimized, setSidebarMinimized] = useState<boolean>(() => {
@@ -46,6 +51,15 @@ export default function App() {
   // Navegação central com proteção contra perda de dados no PDV
   const navigateTo = (targetModule: string) => {
     if (targetModule === currentModule) return;
+
+    // Regra solicitada: apenas o usuário 'admin' poderá utilizar os submenus 'Empresa, Usuários & Auditoria' e 'Menu do Sistema'
+    if (!Database.isAdmin() && (targetModule === 'settings' || targetModule === 'settings_menus')) {
+      toast.error(
+        'Acesso restrito: apenas o usuário "admin" tem permissão para utilizar os submenus "Empresa, Usuários & Auditoria" e "Menu do Sistema".',
+        'Permissão Insuficiente'
+      );
+      return;
+    }
 
     // Se o usuário iniciou uma venda (pelo menos 1 item no carrinho do PDV) e tenta ir para qualquer outro menu:
     if (currentModule === 'pos' && posCart.length > 0) {
@@ -104,6 +118,7 @@ export default function App() {
     Database.load();
     const unsubscribe = Database.subscribe(() => {
       setDbVersion((v) => v + 1);
+      setIsAuthenticated(Database.isSessionAuthenticated());
     });
     return unsubscribe;
   }, []);
@@ -326,6 +341,15 @@ export default function App() {
         return <DashboardView onNavigate={navigateTo} />;
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginView onLoginSuccess={() => setIsAuthenticated(true)} />
+        <ToastContainer />
+      </>
+    );
+  }
 
   return (
     <div className={`min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900 ${currentModule === 'pos' ? 'h-screen overflow-hidden' : ''}`}>

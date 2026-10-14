@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Building2, 
   Bell, 
@@ -6,10 +6,16 @@ import {
   X, 
   ChevronDown,
   Keyboard,
-  Search
+  Search,
+  KeyRound,
+  LogOut,
+  ShieldCheck,
+  User as UserIcon,
 } from 'lucide-react';
 import { Database } from '../../services/db';
+import { toast } from '../../services/toast';
 import { GestaoFacilLogo } from '../common/AppLogo';
+import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -30,6 +36,22 @@ export const Header: React.FC<HeaderProps> = ({
   const dbState = Database.getState();
   const currentCompany = Database.getCurrentCompany();
   const currentUser = Database.getCurrentUser();
+  const isAdmin = currentUser.login === 'admin';
+
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isChangePassOpen, setIsChangePassOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o menu de perfil ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleCompanyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     Database.setCurrentCompany(e.target.value);
@@ -158,38 +180,109 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </button>
 
-        {/* Perfil do Usuário com avatar azul 'RM' */}
-        <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200 relative group">
-          <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0 select-none">
-            {initials}
-          </div>
+        {/* Perfil do Usuário com Menu de Opções e Logout */}
+        <div className="relative pl-2 sm:pl-3 border-l border-slate-200" ref={profileMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            className="flex items-center gap-2.5 p-1 -m-1 rounded-xl hover:bg-slate-100/80 transition-colors cursor-pointer text-left select-none"
+            title="Perfil do Usuário e Opções de Conta"
+          >
+            <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+              {initials}
+            </div>
 
-          <div className="hidden md:flex flex-col text-left">
-            <span className="text-xs font-bold text-slate-900 leading-tight">
-              {currentUser.name}
-            </span>
-            <span className="text-[11px] font-medium text-slate-400 capitalize">
-              {currentUser.role === 'admin' ? 'Administrador' : currentUser.role}
-            </span>
-          </div>
+            <div className="hidden md:flex flex-col text-left">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-900 leading-tight">
+                  {currentUser.name}
+                </span>
+                {isAdmin && (
+                  <span className="text-[9px] font-black uppercase bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded-full border border-blue-200">
+                    Admin
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] font-medium text-slate-400 capitalize">
+                @{currentUser.login} • {currentUser.role === 'admin' ? 'Administrador' : currentUser.role}
+              </span>
+            </div>
 
-          {/* Troca rápida de perfil simulado */}
-          <div className="relative">
-            <select
-              value={currentUser.id}
-              onChange={handleUserChange}
-              className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
-              title="Trocar usuário para testar permissões"
-            >
-              {dbState.users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
-          </div>
+            <ChevronDown size={14} className={`text-slate-400 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* POPOVER DO PERFIL */}
+          {isProfileMenuOpen && (
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="px-4 py-2.5 border-b border-slate-100">
+                <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">
+                  Usuário Conectado
+                </span>
+                <span className="text-xs font-bold text-slate-900 block truncate">
+                  {currentUser.name}
+                </span>
+                <span className="text-[11px] text-slate-500 font-mono block">
+                  Login: @{currentUser.login}
+                </span>
+                <span className="inline-block mt-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  Perfil: {currentUser.role}
+                </span>
+              </div>
+
+              <div className="p-1 space-y-0.5 text-xs">
+                {/* Opção Alterar Senha */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    setIsChangePassOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:text-blue-700 hover:bg-blue-50/70 rounded-xl font-semibold transition-colors cursor-pointer"
+                >
+                  <KeyRound size={15} className="text-blue-600" />
+                  <span>{isAdmin ? 'Alterar Senha do Admin' : 'Alterar Minha Senha'}</span>
+                </button>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      onNavigate('settings');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl font-semibold transition-colors cursor-pointer"
+                  >
+                    <ShieldCheck size={15} className="text-slate-500" />
+                    <span>Empresas, Usuários & Auditoria</span>
+                  </button>
+                )}
+
+                <div className="my-1 border-t border-slate-100" />
+
+                {/* Opção Sair do Sistema / Logout */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    Database.logout();
+                    toast.info('Sessão encerrada com sucesso.');
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl font-bold transition-colors cursor-pointer"
+                >
+                  <LogOut size={15} className="text-rose-600" />
+                  <span>Sair do Sistema (Logout)</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Modal de Alteração de Senha */}
+        <ChangePasswordModal
+          isOpen={isChangePassOpen}
+          onClose={() => setIsChangePassOpen(false)}
+          targetUser={currentUser}
+        />
       </div>
     </header>
   );

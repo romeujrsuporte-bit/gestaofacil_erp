@@ -1167,6 +1167,21 @@ export class Database {
               return c;
             });
           }
+
+          // Migração e garantia de senhas dos usuários
+          if (this.state.users && this.state.users.length > 0) {
+            this.state.users = this.state.users.map((u) => {
+              if (!u.password) {
+                stateNeedsPersist = true;
+                return {
+                  ...u,
+                  password: u.login === 'admin' ? 'admin' : '1234',
+                };
+              }
+              return u;
+            });
+          }
+
           if (stateNeedsPersist) {
             this.persist();
           }
@@ -1261,6 +1276,184 @@ export class Database {
   public static getCurrentUser(): User {
     const s = this.getState();
     return s.users.find((u) => u.id === s.currentUserId) || s.users[0];
+  }
+
+  public static readonly AUTH_SESSION_KEY = 'omni_erp_auth_active';
+  public static readonly AUTH_REMEMBER_LOGIN_KEY = 'omni_erp_remembered_login';
+
+  public static isSessionAuthenticated(): boolean {
+    if (typeof window === 'undefined') return true;
+    return sessionStorage.getItem(this.AUTH_SESSION_KEY) === 'true';
+  }
+
+  public static setSessionAuthenticated(authenticated: boolean, rememberMe: boolean = false) {
+    if (typeof window === 'undefined') return;
+    if (authenticated) {
+      sessionStorage.setItem(this.AUTH_SESSION_KEY, 'true');
+      if (rememberMe) {
+        localStorage.setItem(this.AUTH_SESSION_KEY, 'true');
+      } else {
+        localStorage.removeItem(this.AUTH_SESSION_KEY);
+      }
+    } else {
+      sessionStorage.removeItem(this.AUTH_SESSION_KEY);
+      localStorage.removeItem(this.AUTH_SESSION_KEY);
+    }
+  }
+
+  public static authenticate(
+    login: string,
+    password: string,
+    rememberMe: boolean = false
+  ): {
+    success: boolean;
+    user?: User;
+    error?: string;
+  } {
+    const cleanLogin = (login || '').trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+
+    if (!cleanLogin) {
+      return { success: false, error: 'Por favor, informe o nome de usuário ou login.' };
+    }
+    if (!cleanPass) {
+      return { success: false, error: 'Por favor, informe a senha.' };
+    }
+
+    const state = this.getState();
+    const user = state.users.find((u) => u.login.toLowerCase() === cleanLogin);
+
+    if (!user) {
+      return { success: false, error: 'Usuário não encontrado no sistema.' };
+    }
+
+    if (user.status === 'inativo') {
+      return { success: false, error: 'Este usuário está inativo. Contate o administrador.' };
+    }
+
+    const expectedPassword = user.password || (user.login === 'admin' ? 'admin' : '1234');
+
+    if (cleanPass !== expectedPassword) {
+      return { success: false, error: 'Senha incorreta para o usuário informado.' };
+    }
+
+    // Define o usuário autenticado e a sessão
+    this.setCurrentUser(user.id);
+    this.setSessionAuthenticated(true, rememberMe);
+
+    // Salva o login lembrado se solicitado
+    if (typeof window !== 'undefined') {
+      if (rememberMe) {
+        localStorage.setItem(this.AUTH_REMEMBER_LOGIN_KEY, user.login);
+      } else {
+        localStorage.removeItem(this.AUTH_REMEMBER_LOGIN_KEY);
+      }
+    }
+
+    this.addAuditLog(
+      'LOGIN_EFETUADO',
+      'SEGURANCA',
+      user.id,
+      `Usuário ${user.name} (${user.login}) autenticado com sucesso.`
+    );
+    return { success: true, user };
+  }
+
+  public static changePassword(
+    targetUserId: string,
+    currentPassword: string,
+    newPassword: string,
+    requestingUserId: string
+  ): { success: boolean; error?: string } {
+    const state = this.getState();
+    const targetUser = state.users.find((u) => u.id === targetUserId);
+    if (!targetUser) {
+      return { success: false, error: 'Usuário alvo não encontrado.' };
+    }
+
+    const requestingUser = state.users.find((u) => u.id === requestingUserId) || this.getCurrentUser();
+
+    // Regra crítica: "o usuário 'admin', terá a senha padrão 'admin' e poderá ser alterada apenas pelo próprio usuário 'admin'"
+    if (targetUser.login === 'admin' || targetUser.id === 'usr-admin') {
+      if (requestingUser.login !== 'admin') {
+        return {
+          success: false,
+          error: 'Apenas o próprio usuário "admin" tem autorização para alterar a senha do administrador.',
+        };
+      }
+    }
+
+    const expectedCurrent = targetUser.password || (targetUser.login === 'admin' ? 'admin' : '1234');
+    if (currentPassword !== expectedCurrent) {
+      return { success: false, error: 'A senha atual informada está incorreta.' };
+    }
+
+    const cleanNewPass = (newPassword || '').trim();
+    if (!cleanNewPass || cleanNewPass.length < 3) {
+      return { success: false, error: 'A nova senha deve possuir no mínimo 3 caracteres.' };
+    }
+
+    targetUser.password = cleanNewPass;
+    this.persist();
+
+    this.addAuditLog(
+      'SENHA_ALTERADA',
+      'SEGURANCA',
+      targetUser.id,
+      `Senha do usuário ${targetUser.name} (${targetUser.login}) alterada com sucesso.`
+    );
+
+    return { success: true };
+  }
+
+  public static resetPasswordToDefault(
+    targetUserId: string,
+    requestingUserId: string
+  ): { success: boolean; error?: string } {
+    const state = this.getState();
+    const targetUser = state.users.find((u) => u.id === targetUserId);
+    if (!targetUser) {
+      return { success: false, error: 'Usuário alvo não encontrado.' };
+    }
+
+    const requestingUser = state.users.find((u) => u.id === requestingUserId) || this.getCurrentUser();
+
+    // Regra crítica: se o usuário alvo for o admin, apenas o próprio admin pode redefinir
+    if (targetUser.login === 'admin' || targetUser.id === 'usr-admin') {
+      if (requestingUser.login !== 'admin') {
+        return {
+          success: false,
+          error: 'Apenas o próprio usuário "admin" tem autorização para alterar ou redefinir a senha do administrador.',
+        };
+      }
+      targetUser.password = 'admin';
+    } else {
+      targetUser.password = '1234';
+    }
+
+    this.persist();
+    this.addAuditLog(
+      'SENHA_REDEFINIDA_PADRAO',
+      'SEGURANCA',
+      targetUser.id,
+      `Senha do usuário ${targetUser.name} (${targetUser.login}) redefinida para a senha padrão (${targetUser.password}).`
+    );
+
+    return { success: true };
+  }
+
+  public static logout() {
+    const user = this.getCurrentUser();
+    if (user) {
+      this.addAuditLog('LOGOUT_EFETUADO', 'SEGURANCA', user.id, `Usuário ${user.name} desconectou do sistema.`);
+    }
+    this.setSessionAuthenticated(false);
+    this.notify();
+  }
+
+  public static isAdmin(user?: User): boolean {
+    const u = user || this.getCurrentUser();
+    return u?.login === 'admin';
   }
 
   public static addAuditLog(action: string, module: string, recordId: string, details: string) {
@@ -2139,6 +2332,7 @@ export class Database {
         id: 'usr-admin',
         name: 'Romeu Júnior',
         login: 'admin',
+        password: 'admin',
         role: 'admin',
         companyId: companyMatrizId,
         status: 'ativo',
@@ -2163,6 +2357,7 @@ export class Database {
         id: 'usr-gerente',
         name: 'Carlos Eduardo Mendes',
         login: 'gerente',
+        password: '1234',
         role: 'gerente',
         companyId: companyMatrizId,
         status: 'ativo',
@@ -2187,6 +2382,7 @@ export class Database {
         id: 'usr-balconista',
         name: 'Mariana Souza',
         login: 'balcao',
+        password: '1234',
         role: 'balconista',
         companyId: companyMatrizId,
         status: 'ativo',
@@ -2211,6 +2407,7 @@ export class Database {
         id: 'usr-vendedor-externo',
         name: 'Bruno Lima',
         login: 'externo',
+        password: '1234',
         role: 'vendedor_externo',
         companyId: companyMatrizId,
         status: 'ativo',
@@ -2235,6 +2432,7 @@ export class Database {
         id: 'usr-financeiro',
         name: 'Patrícia Alves',
         login: 'financeiro',
+        password: '1234',
         role: 'financeiro',
         companyId: companyMatrizId,
         status: 'ativo',

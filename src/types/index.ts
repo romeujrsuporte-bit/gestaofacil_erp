@@ -23,6 +23,7 @@ export interface User {
   id: string;
   name: string;
   login: string;
+  password?: string;
   role: UserRole;
   companyId: string;
   status: 'ativo' | 'inativo';

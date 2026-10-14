@@ -38,11 +38,13 @@ import {
   Lock,
   Truck,
   Database as DatabaseIcon,
+  KeyRound,
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { Company, User, UserRole, SidebarMenuConfig } from '../../types';
 import { ThermalPrinterSettings } from './ThermalPrinterSettings';
 import { SupabaseSettings } from './SupabaseSettings';
+import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 import { formatCurrency } from '../../services/pricingEngine';
 import { toast } from '../../services/toast';
 
@@ -205,12 +207,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
   const [dbState, setDbState] = useState(Database.getState());
   const currentCompany = Database.getCurrentCompany();
   const currentUser = Database.getCurrentUser();
+  const isAdmin = currentUser.login === 'admin';
 
-  const [activeTab, setActiveTab] = useState<'empresas' | 'usuarios' | 'impressora' | 'preferencias' | 'menus' | 'supabase' | 'auditoria' | 'backup'>(initialTab);
+  // Se o usuário não for o admin, as abas de Empresas, Usuários, Auditoria e Menus são bloqueadas
+  const isRestrictedTab = (tab: string) =>
+    tab === 'empresas' || tab === 'usuarios' || tab === 'auditoria' || tab === 'menus';
+
+  const initialAllowedTab = !isAdmin && isRestrictedTab(initialTab) ? 'preferencias' : initialTab;
+
+  const [activeTab, setActiveTab] = useState<'empresas' | 'usuarios' | 'impressora' | 'preferencias' | 'menus' | 'supabase' | 'auditoria' | 'backup'>(initialAllowedTab);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    if (!isAdmin && isRestrictedTab(initialTab)) {
+      setActiveTab('preferencias');
+    } else {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isAdmin]);
 
   useEffect(() => {
     return Database.subscribe(() => {
@@ -356,6 +369,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
   // Modal Usuário
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [passwordChangeUser, setPasswordChangeUser] = useState<User | null>(null);
   const [userName, setUserName] = useState('');
   const [userLogin, setUserLogin] = useState('');
   const [userRole, setUserRole] = useState<UserRole>('balconista');
@@ -505,6 +519,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
               name: userName.trim(),
               login: userLogin.trim(),
               role: userRole,
+              password: u.password || (u.login === 'admin' ? 'admin' : '1234'),
               permissions: { ...permissions, maxDiscountPercent: maxDisc },
             }
           : u
@@ -515,13 +530,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
         id: 'usr-' + Date.now(),
         name: userName.trim(),
         login: userLogin.trim(),
+        password: userLogin.trim().toLowerCase() === 'admin' ? 'admin' : '1234',
         role: userRole,
         companyId: currentCompany.id,
         status: 'ativo',
         permissions: { ...permissions, maxDiscountPercent: maxDisc },
       };
       state.users.push(newUser);
-      Database.addAuditLog('CRIAR_USUARIO', 'CONFIGURACOES', newUser.id, `Usuário ${newUser.name} (${userRole}) cadastrado`);
+      Database.addAuditLog('CRIAR_USUARIO', 'CONFIGURACOES', newUser.id, `Usuário ${newUser.name} (${userRole}) cadastrado com senha padrão`);
     }
 
     Database.persist();
@@ -588,33 +604,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
         </div>
 
         <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl text-xs font-bold gap-1">
-          <button
-            onClick={() => setActiveTab('empresas')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'empresas' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Building2 size={14} />
-            <span>Matriz / Filiais</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('usuarios')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'usuarios' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Users size={14} />
-            <span>Usuários & Perfis</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('menus')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'menus' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <LayoutGrid size={14} />
-            <span>Menus do Sistema</span>
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('empresas')}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'empresas' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Building2 size={14} />
+                <span>Matriz / Filiais</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('usuarios')}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'usuarios' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Users size={14} />
+                <span>Usuários & Perfis</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('menus')}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'menus' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LayoutGrid size={14} />
+                <span>Menus do Sistema</span>
+              </button>
+            </>
+          )}
           <button
             onClick={() => setActiveTab('impressora')}
             className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
@@ -633,15 +653,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
             <Sliders size={14} />
             <span>Preferências & Alertas</span>
           </button>
-          <button
-            onClick={() => setActiveTab('auditoria')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'auditoria' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <History size={14} />
-            <span>Logs de Auditoria</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('auditoria')}
+              className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                activeTab === 'auditoria' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <History size={14} />
+              <span>Logs de Auditoria</span>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('supabase')}
             className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
@@ -769,9 +791,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
                     <span className="text-[10px] font-bold px-2 py-0.2 rounded-full uppercase bg-slate-100 text-slate-700">
                       {u.role}
                     </span>
+                    {u.login === 'admin' ? (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                        Admin Master
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="text-slate-500 text-[11px] mt-0.5">
-                    Login: <strong className="font-mono text-slate-700">{u.login}</strong> • Desconto Máximo Autorizado: <strong>{u.permissions.maxDiscountPercent}%</strong>
+                  <div className="text-slate-500 text-[11px] mt-0.5 flex flex-wrap items-center gap-2">
+                    <span>Login: <strong className="font-mono text-slate-800">@{u.login}</strong></span>
+                    <span>•</span>
+                    <span>Desconto Máx: <strong>{u.permissions.maxDiscountPercent}%</strong></span>
+                    <span>•</span>
+                    {u.login === 'admin' ? (
+                      <span className="font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        Senha: <strong>{u.password === 'admin' ? 'Padrão (admin)' : 'Alterada'}</strong> (Somente @admin pode alterar)
+                      </span>
+                    ) : (
+                      <span className="font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        Senha: <strong>{u.password === '1234' ? 'Padrão (1234)' : 'Personalizada'}</strong>
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -781,6 +820,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
                   }`}>
                     {u.status}
                   </span>
+
+                  {/* Botão Alterar Senha */}
+                  <button
+                    type="button"
+                    onClick={() => setPasswordChangeUser(u)}
+                    className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+                    title={u.login === 'admin' ? 'Alterar senha do administrador (apenas o próprio admin pode alterar)' : `Alterar senha do usuário ${u.name}`}
+                  >
+                    <KeyRound size={13} />
+                    <span>{u.login === 'admin' ? 'Alterar Senha do Admin' : 'Alterar Senha'}</span>
+                  </button>
+
+                  {/* Botão Redefinir para 1234 (Apenas para não-admin) */}
+                  {u.login !== 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = Database.resetPasswordToDefault(u.id, currentUser.id);
+                        if (res.success) {
+                          toast.success(`Senha do usuário ${u.name} redefinida para a senha padrão "1234"!`);
+                        } else {
+                          toast.error(res.error || 'Erro ao redefinir senha.');
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                      title="Redefinir senha deste usuário para o padrão 1234"
+                    >
+                      <RotateCcw size={12} />
+                      <span className="hidden sm:inline">Resetar (1234)</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       setEditingUser(u);
@@ -790,7 +861,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
                       setUserMaxDiscount(String(u.permissions.maxDiscountPercent));
                       setIsUserModalOpen(true);
                     }}
-                    className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-md"
+                    className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-md cursor-pointer"
+                    title="Editar dados cadastrais do usuário"
                   >
                     <Edit2 size={14} />
                   </button>
@@ -1643,19 +1715,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
                 />
               </div>
+
+              {/* Informação sobre Senha Padrão e Política de Acesso */}
+              <div className="p-2.5 bg-blue-50/80 border border-blue-200/80 rounded-xl space-y-1 text-[11px] text-blue-900">
+                <div className="flex items-center gap-1.5 font-bold text-blue-950">
+                  <KeyRound size={13} className="text-blue-600" />
+                  <span>Política de Senhas do ERP:</span>
+                </div>
+                <p className="text-blue-800 leading-snug">
+                  • Usuário <strong className="font-mono">admin</strong>: senha padrão <span className="font-mono font-bold bg-white px-1 rounded border border-blue-200">admin</span> (alterável apenas pelo próprio @admin).
+                </p>
+                <p className="text-blue-800 leading-snug">
+                  • Demais usuários: senha padrão <span className="font-mono font-bold bg-white px-1 rounded border border-blue-200">1234</span>.
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsUserModalOpen(false)}
-                className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs"
+                className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs cursor-pointer"
               >
                 Salvar Usuário
               </button>
@@ -1663,6 +1749,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
           </form>
         </div>
       )}
+
+      {/* Modal de Alteração de Senha acionado na lista de usuários */}
+      <ChangePasswordModal
+        isOpen={!!passwordChangeUser}
+        onClose={() => setPasswordChangeUser(null)}
+        targetUser={passwordChangeUser || currentUser}
+      />
     </div>
   );
 };

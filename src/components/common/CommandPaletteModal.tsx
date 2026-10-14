@@ -19,8 +19,9 @@ import {
   ArrowRight,
   Scale,
   Printer,
-  Database
+  Database as DatabaseIcon,
 } from 'lucide-react';
+import { Database } from '../../services/db';
 
 interface CommandItem {
   id: string;
@@ -256,7 +257,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       title: 'Banco de Dados Supabase (PostgreSQL, Nuvem & Backup)',
       category: 'Configurações',
       targetModule: 'settings_supabase',
-      icon: <Database size={16} className="text-emerald-600" />,
+      icon: <DatabaseIcon size={16} className="text-emerald-600" />,
       keywords: ['supabase', 'banco de dados', 'postgres', 'postgresql', 'nuvem', 'backup', 'sincronizacao', 'sql'],
     },
     {
@@ -295,7 +296,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     },
   ];
 
+  const isAdmin = Database.isAdmin();
+
   const filteredCommands = COMMANDS.filter((cmd) => {
+    // Regra solicitada: apenas o usuário 'admin' poderá utilizar 'Empresa, Usuários & Auditoria' e 'Menu do Sistema'
+    if (!isAdmin && (cmd.targetModule === 'settings' || cmd.targetModule === 'settings_menus')) {
+      return false;
+    }
     if (!query.trim()) return true;
     const q = query.toLowerCase().trim();
     return (

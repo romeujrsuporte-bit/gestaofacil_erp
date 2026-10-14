@@ -27,9 +27,11 @@ import {
   PanelLeftOpen,
   ChevronDown,
   ChevronRight,
-  FolderOpen
+  FolderOpen,
+  LogOut,
 } from 'lucide-react';
 import { Database } from '../../services/db';
+import { toast } from '../../services/toast';
 
 interface SidebarProps {
   currentModule: string;
@@ -228,7 +230,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Configurações',
       icon: <Settings size={18} />,
       defaultModule: 'settings',
-      requiredPermission: 'canManageUsers',
       subItems: [
         { id: 'settings', label: 'Empresas, Usuários & Auditoria' },
         { id: 'settings_supabase', label: 'Banco Supabase (Nuvem)' },
@@ -238,6 +239,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
   ];
+
+  const isAdmin = currentUser.login === 'admin';
 
   const visibleMenuSections = useMemo(() => {
     return menuSections
@@ -253,11 +256,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       })
       .map((section) => {
         if (!section.subItems) return section;
-        const visibleSubs = section.subItems.filter(
-          (sub) => !menuConfig.hiddenSubItems.includes(sub.id)
-        );
+        const visibleSubs = section.subItems.filter((sub) => {
+          // Regra solicitada: apenas o usuário "admin" poderá utilizar os submenus "Empresa, Usuários & Auditoria" e "Menu do Sistema"
+          if (!isAdmin && (sub.id === 'settings' || sub.id === 'settings_menus')) {
+            return false;
+          }
+          return !menuConfig.hiddenSubItems.includes(sub.id);
+        });
         return {
           ...section,
+          defaultModule: !isAdmin && section.id === 'configuracoes' ? 'settings_preferences' : section.defaultModule,
           subItems: visibleSubs,
         };
       })
@@ -460,8 +468,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
         </div>
 
+        {/* Botão Sair do Sistema / Logout */}
+        <div className="p-2 border-t border-zinc-800/80">
+          <button
+            type="button"
+            onClick={() => {
+              Database.logout();
+              toast.info('Sessão encerrada com sucesso.');
+            }}
+            className={`w-full flex items-center ${
+              isMinimized ? 'justify-center p-2' : 'justify-between px-3 py-2'
+            } text-zinc-400 hover:text-rose-400 hover:bg-rose-950/20 border border-transparent hover:border-rose-900/40 rounded-xl transition-all text-xs font-bold cursor-pointer group`}
+            title="Encerrar sessão e voltar para a tela de login"
+          >
+            <div className="flex items-center gap-2">
+              <LogOut size={16} className="text-zinc-500 group-hover:text-rose-400" />
+              {!isMinimized && <span>Sair do Sistema</span>}
+            </div>
+            {!isMinimized && (
+              <span className="text-[10px] text-zinc-500 group-hover:text-rose-400 font-mono">
+                {currentUser.login}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Rodapé da Barra Lateral: GestãoFácil ERP v1.0.0 */}
-        <div className="p-3 border-t border-zinc-800/80 text-[11px] text-zinc-400 font-medium text-center shrink-0">
+        <div className="p-2.5 border-t border-zinc-800/80 text-[11px] text-zinc-400 font-medium text-center shrink-0">
           {!isMinimized ? (
             <div className="flex flex-col items-start gap-0.5 text-left">
               <div className="flex items-center justify-between w-full">
