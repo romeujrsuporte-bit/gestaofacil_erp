@@ -198,7 +198,7 @@ export const MENU_SECTIONS_CATALOG: MenuCatalogItem[] = [
       { id: 'settings_supabase', label: 'Banco Supabase (Nuvem)', description: 'Conexão PostgreSQL, sincronização e backup em nuvem' },
       { id: 'settings_menus', label: 'Menus do Sistema', description: 'Seleção de menus visíveis na barra lateral' },
       { id: 'settings_preferences', label: 'Preferências & Alertas', description: 'Alertas de contas vencidas e parâmetros do sistema' },
-      { id: 'settings_printer', label: 'Impressora Térmica', description: 'Configurações de impressão térmica 58mm/80mm' },
+      { id: 'settings_printer', label: 'Configuração de Impressão', description: 'Configurações de impressão térmica 58mm/80mm e documentos em Folha A4' },
     ],
   },
 ];
@@ -642,7 +642,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
             }`}
           >
             <Printer size={14} />
-            <span>Impressora Térmica</span>
+            <span>Configuração de Impressão</span>
           </button>
           <button
             onClick={() => setActiveTab('preferencias')}

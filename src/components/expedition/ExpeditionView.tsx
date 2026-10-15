@@ -100,6 +100,7 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
   const [editingManifest, setEditingManifest] = useState<DeliveryManifest | null>(null);
   const [viewingManifestDetails, setViewingManifestDetails] = useState<DeliveryManifest | null>(null);
   const [printManifest, setPrintManifest] = useState<DeliveryManifest | null>(null);
+  const [printManifestScope, setPrintManifestScope] = useState<'all' | 'roteiro' | 'conferencia'>('all');
 
   // Form de Criação/Edição de Romaneio
   const [formDepartureDate, setFormDepartureDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -2570,11 +2571,20 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
               ))}
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-slate-100">
+            <div className="flex justify-end items-center gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPrintManifest(viewingManifestDetails)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                title="Imprimir ficha de expedição deste manifesto"
+              >
+                <Printer size={15} />
+                <span>Imprimir Ficha</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setViewingManifestDetails(null)}
-                className="px-5 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl"
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl cursor-pointer"
               >
                 Fechar Ficha
               </button>
@@ -2587,15 +2597,132 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
       {/* MODAL 3: IMPRESSÃO DE ROMANEIO (MANIFESTO + FICHA DE CLIENTES COM CANHOTO) */}
       {/* ========================================================================= */}
       {printManifest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl p-6 sm:p-8 space-y-6 max-h-[94vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto printable-expedition-modal-root">
+          {/* CSS para Impressão com Quebra de Página entre Roteiro e Conferência do Armazém */}
+          <style>{`
+            @media print {
+              @page {
+                size: A4 portrait;
+                margin: 10mm 12mm 12mm 12mm;
+              }
+              html, body {
+                height: auto !important;
+                min-height: 100% !important;
+                overflow: visible !important;
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+              }
+              body * {
+                visibility: hidden !important;
+              }
+              .printable-expedition-modal-root,
+              .printable-expedition-modal-root * {
+                visibility: visible !important;
+              }
+              .printable-expedition-modal-root {
+                position: static !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: white !important;
+                overflow: visible !important;
+                display: block !important;
+                height: auto !important;
+                max-height: none !important;
+              }
+              .printable-expedition-modal-card {
+                position: static !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                max-height: none !important;
+                display: block !important;
+              }
+              .printable-expedition-manifest {
+                position: static !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+                display: block !important;
+              }
+              .print-hidden {
+                display: none !important;
+              }
+              .manifest-page-1 {
+                page-break-after: always !important;
+                break-after: page !important;
+                display: block !important;
+              }
+              .manifest-page-2 {
+                page-break-before: always !important;
+                break-before: page !important;
+                clear: both !important;
+                display: block !important;
+                padding-top: 5mm !important;
+              }
+            }
+          `}</style>
+
+          <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl p-6 sm:p-8 space-y-6 max-h-[94vh] overflow-y-auto printable-expedition-modal-card">
             {/* AÇÕES DE IMPRESSÃO */}
-            <div className="flex justify-between items-center pb-4 border-b border-slate-200 print:hidden">
-              <div className="flex items-center gap-2">
-                <Printer size={20} className="text-blue-600" />
-                <h3 className="font-extrabold text-base text-slate-900">
-                  Visualização de Impressão do Romaneio
-                </h3>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-4 border-b border-slate-200 print-hidden">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
+                  <Printer size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    Ficha de Expedição & Manifesto de Carga
+                  </h3>
+                  <span className="text-[11px] text-slate-500">
+                    Página 1: Roteiro por Cliente • Página 2: Conferência Consolidada do Armazém
+                  </span>
+                </div>
+              </div>
+
+              {/* Seletor de Escopo de Impressão */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setPrintManifestScope('all')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                    printManifestScope === 'all'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Imprime o Roteiro e a Conferência do Armazém em páginas A4 separadas"
+                >
+                  📄 Ficha Completa (2 Págs)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintManifestScope('roteiro')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                    printManifestScope === 'roteiro'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Imprime apenas a Página 1: Roteiro de Entregas por Cliente"
+                >
+                  📍 Somente Roteiro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintManifestScope('conferencia')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                    printManifestScope === 'conferencia'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Imprime apenas a Página 2: Relação Consolidada para Carregamento (Armazém)"
+                >
+                  📦 Somente Armazém
+                </button>
               </div>
 
               <div className="flex items-center gap-2">
@@ -2603,9 +2730,16 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
                   type="button"
                   onClick={handlePrint}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  title="Imprimir com quebra de página automática em folha A4"
                 >
                   <Printer size={15} />
-                  <span>Imprimir Agora</span>
+                  <span>
+                    {printManifestScope === 'all'
+                      ? 'Imprimir Ficha Completa'
+                      : printManifestScope === 'roteiro'
+                      ? 'Imprimir Roteiro'
+                      : 'Imprimir Armazém'}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -2617,191 +2751,341 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
               </div>
             </div>
 
-            {/* CONTEÚDO PRONTO PARA IMPRESSÃO */}
-            <div className="space-y-6 text-slate-900 font-sans">
-              {/* CABEÇALHO DO MANIFESTO */}
-              <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-start">
-                <div>
-                  <h2 className="text-lg font-black tracking-tight uppercase">
-                    {currentCompany.tradeName || currentCompany.name}
-                  </h2>
-                  <p className="text-xs text-slate-600">
-                    CNPJ: {currentCompany.cnpjCpf} • Telefone: {currentCompany.phone}
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    {currentCompany.address.street}, {currentCompany.address.number} - {currentCompany.address.city}/{currentCompany.address.state}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-lg font-mono font-black text-blue-700">
-                    {printManifest.number}
-                  </div>
-                  <div className="text-xs font-bold uppercase text-slate-700">
-                    MANIFESTO DE CARGA & ENTREGA
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    Data: {printManifest.departureDate}
-                  </div>
-                </div>
-              </div>
-
-              {/* DADOS DA ROTA E TRANSPORTE */}
-              <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                <div>
-                  <span className="font-bold text-slate-500 uppercase block text-[10px]">Rota de Entrega:</span>
-                  <span className="font-extrabold text-slate-900">{printManifest.routeName}</span>
-                </div>
-                <div>
-                  <span className="font-bold text-slate-500 uppercase block text-[10px]">Motorista:</span>
-                  <span className="font-extrabold text-slate-900">{printManifest.driverName}</span>
-                </div>
-                <div>
-                  <span className="font-bold text-slate-500 uppercase block text-[10px]">Veículo / Placa:</span>
-                  <span className="font-extrabold text-slate-900 font-mono">
-                    {printManifest.vehiclePlate} ({printManifest.vehicleModel || 'Veículo Próprio'})
+            {/* AVISO DE CONFIGURAÇÃO DE QUEBRA DE PÁGINA (NA TELA) */}
+            {printManifestScope === 'all' && (
+              <div className="print-hidden bg-blue-50/80 border border-blue-200 text-blue-900 p-3 rounded-xl text-xs flex items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-blue-600 shrink-0" />
+                  <span>
+                    <strong>Páginas Separadas:</strong> A <em>Relação Consolidada de Produtos para Carregamento (Conferência Armazém)</em> sairá automaticamente em uma página separada após o <em>Roteiro de Entregas por Cliente</em>.
                   </span>
                 </div>
+                <span className="hidden sm:inline-block text-[11px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md shrink-0">
+                  Formato A4 • 2 Páginas
+                </span>
               </div>
+            )}
 
-              {/* 1. MAPA AGREGADO DE CARREGAMENTO (CONFERÊNCIA DE CARGA DO ESTOQUE) */}
-              <div className="space-y-2">
-                <h4 className="font-extrabold text-xs uppercase text-slate-900 border-b border-slate-300 pb-1">
-                  1. Relação Consolidada de Produtos para Carregamento (Conferência Armazém):
-                </h4>
+            {/* CONTEÚDO PRONTO PARA IMPRESSÃO */}
+            <div className="printable-expedition-manifest space-y-6 text-slate-900 font-sans">
+              {/* ========================================================================= */}
+              {/* PÁGINA 1: CABEÇALHO, TRANSPORTE & ROTEIRO DE ENTREGAS POR CLIENTE         */}
+              {/* ========================================================================= */}
+              {printManifestScope !== 'conferencia' && (
+                <div className={`space-y-5 ${printManifestScope === 'all' ? 'manifest-page-1' : ''}`}>
+                  {/* CABEÇALHO DO MANIFESTO */}
+                  <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-start">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight uppercase">
+                        {currentCompany.tradeName || currentCompany.name}
+                      </h2>
+                      <p className="text-xs text-slate-600">
+                        CNPJ: {currentCompany.cnpjCpf} • Telefone: {currentCompany.phone}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {currentCompany.address.street}, {currentCompany.address.number} - {currentCompany.address.city}/{currentCompany.address.state}
+                      </p>
+                    </div>
 
-                {(() => {
-                  const aggregatedItems = new Map<string, { code: string; desc: string; unit: string; qty: number }>();
-                  printManifest.orders.forEach((o) => {
-                    o.items.forEach((it) => {
-                      const ex = aggregatedItems.get(it.productId);
-                      if (ex) {
-                        ex.qty += it.quantity;
-                      } else {
-                        aggregatedItems.set(it.productId, {
-                          code: it.productCode,
-                          desc: it.description,
-                          unit: it.unit,
-                          qty: it.quantity,
-                        });
-                      }
-                    });
-                  });
-
-                  return (
-                    <table className="w-full text-left text-xs border border-slate-300">
-                      <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-300">
-                        <tr>
-                          <th className="p-2 w-16">Código</th>
-                          <th className="p-2">Descrição da Mercadoria</th>
-                          <th className="p-2 text-center w-16">Unid</th>
-                          <th className="p-2 text-right w-24">Qtd Total</th>
-                          <th className="p-2 text-center w-20">Conferido</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {Array.from(aggregatedItems.values()).map((p) => (
-                          <tr key={p.code}>
-                            <td className="p-2 font-mono font-bold text-slate-800">{p.code}</td>
-                            <td className="p-2 font-medium text-slate-900">{p.desc}</td>
-                            <td className="p-2 text-center text-slate-600">{p.unit}</td>
-                            <td className="p-2 text-right font-black text-slate-900">
-                              {formatQuantity(p.qty)}
-                            </td>
-                            <td className="p-2 text-center">
-                              <span className="inline-block w-4 h-4 border border-slate-400 rounded-sm" />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  );
-                })()}
-              </div>
-
-              {/* 2. ROTEIRO DE ENTREGAS POR CLIENTE (COM CANHOTO DE ASSINATURA) */}
-              <div className="space-y-3 pt-2">
-                <h4 className="font-extrabold text-xs uppercase text-slate-900 border-b border-slate-300 pb-1">
-                  2. Roteiro de Entregas por Cliente (Ordem da Rota):
-                </h4>
-
-                <div className="space-y-4">
-                  {printManifest.orders.map((ord) => (
-                    <div
-                      key={ord.orderId}
-                      className="border border-slate-300 p-3 rounded-lg space-y-2 text-xs break-inside-avoid"
-                    >
-                      <div className="flex justify-between items-start border-b border-slate-200 pb-1.5">
-                        <div>
-                          <div className="font-black text-sm text-slate-900">
-                            {ord.sequence}ª PARADA: {ord.customerName}
-                          </div>
-                          <div className="text-slate-600">
-                            {ord.address.street}, {ord.address.number} - {ord.address.neighborhood}, {ord.address.city}/{ord.address.state}
-                          </div>
-                          <div className="text-slate-500 text-[11px]">
-                            Pedido: <strong>{ord.orderNumber}</strong> • Telefone: {ord.customerPhone || '—'} • Vendedor: {ord.sellerName || '—'}
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <div className="font-black text-sm font-mono text-slate-900">
-                            {formatCurrency(ord.totalValue)}
-                          </div>
-                          <div className="text-[11px] font-bold text-slate-700">
-                            {ord.paymentStatus === 'cobrar_na_entrega' ? (
-                              <span className="text-rose-700">COBRAR NA ENTREGA ({ord.paymentMethod.toUpperCase()})</span>
-                            ) : (
-                              <span className="text-emerald-700">PAGO / FATURADO</span>
-                            )}
-                          </div>
-                        </div>
+                    <div className="text-right">
+                      <div className="text-lg font-mono font-black text-blue-700">
+                        {printManifest.number}
                       </div>
-
-                      {/* ITENS DESTE CLIENTE */}
-                      <div className="text-[11px] text-slate-700">
-                        <span className="font-bold">Itens do pedido: </span>
-                        {ord.items.map((it, i) => (
-                          <span key={it.productId}>
-                            {formatQuantity(it.quantity)}x {it.description}
-                            {i < ord.items.length - 1 ? '; ' : ''}
-                          </span>
-                        ))}
+                      <div className="text-xs font-bold uppercase text-slate-700">
+                        MANIFESTO DE CARGA & ROTEIRO DE ENTREGAS
                       </div>
-
-                      {/* CANHOTO DE RECEBIMENTO */}
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 text-[10px] text-slate-600 items-end">
-                        <div>
-                          <span>Data / Hora Recebimento: ____/____/________ ____:____</span>
-                        </div>
-                        <div>
-                          <span>Nome do Recebedor (Legível): __________________________</span>
-                        </div>
-                        <div className="text-right">
-                          <span>Assinatura: ____________________________________</span>
-                        </div>
+                      <div className="text-xs text-slate-500">
+                        Data de Saída: {printManifest.departureDate}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              {/* TOTAIS E ASSINATURA DO MOTORISTA */}
-              <div className="pt-4 border-t-2 border-slate-900 flex justify-between items-center text-xs">
-                <div>
-                  <p>
-                    Total de Entregas: <strong>{printManifest.totalOrders} clientes</strong>
-                  </p>
-                  <p>
-                    Total da Carga: <strong>{formatCurrency(printManifest.totalValue)}</strong> • A Receber: <strong>{formatCurrency(printManifest.totalAmountToCollect)}</strong>
-                  </p>
-                </div>
+                  {/* DADOS DA ROTA E TRANSPORTE */}
+                  <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-500 uppercase block text-[10px]">Rota de Entrega:</span>
+                      <span className="font-extrabold text-slate-900">{printManifest.routeName}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-500 uppercase block text-[10px]">Motorista:</span>
+                      <span className="font-extrabold text-slate-900">{printManifest.driverName}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-500 uppercase block text-[10px]">Veículo / Placa:</span>
+                      <span className="font-extrabold text-slate-900 font-mono">
+                        {printManifest.vehiclePlate} ({printManifest.vehicleModel || 'Veículo Próprio'})
+                      </span>
+                    </div>
+                  </div>
 
-                <div className="text-center">
-                  <div className="w-56 border-b border-slate-900 mb-1" />
-                  <span className="text-[10px] text-slate-600 font-bold">Assinatura do Motorista / Transportador</span>
+                  {/* 1. ROTEIRO DE ENTREGAS POR CLIENTE (COM CANHOTO DE ASSINATURA) */}
+                  <div className="space-y-3 pt-1">
+                    <div className="flex justify-between items-center border-b border-slate-300 pb-1">
+                      <h4 className="font-extrabold text-xs uppercase text-slate-900">
+                        1. Roteiro de Entregas por Cliente (Ordem da Rota):
+                      </h4>
+                      <span className="text-[10px] text-slate-500 font-semibold">
+                        Total: {printManifest.orders.length} paradas
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {printManifest.orders.map((ord) => (
+                        <div
+                          key={ord.orderId}
+                          className="border border-slate-300 p-3 rounded-lg space-y-2 text-xs break-inside-avoid"
+                        >
+                          <div className="flex justify-between items-start border-b border-slate-200 pb-1.5">
+                            <div>
+                              <div className="font-black text-sm text-slate-900">
+                                {ord.sequence}ª PARADA: {ord.customerName}
+                              </div>
+                              <div className="text-slate-600">
+                                {ord.address.street}, {ord.address.number} - {ord.address.neighborhood}, {ord.address.city}/{ord.address.state}
+                              </div>
+                              <div className="text-slate-500 text-[11px]">
+                                Pedido: <strong>{ord.orderNumber}</strong> • Telefone: {ord.customerPhone || '—'} • Vendedor: {ord.sellerName || '—'}
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="font-black text-sm font-mono text-slate-900">
+                                {formatCurrency(ord.totalValue)}
+                              </div>
+                              <div className="text-[11px] font-bold text-slate-700">
+                                {ord.paymentStatus === 'cobrar_na_entrega' ? (
+                                  <span className="text-rose-700">COBRAR NA ENTREGA ({ord.paymentMethod.toUpperCase()})</span>
+                                ) : (
+                                  <span className="text-emerald-700">PAGO / FATURADO</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ITENS DESTE CLIENTE */}
+                          <div className="text-[11px] text-slate-700">
+                            <span className="font-bold">Itens do pedido: </span>
+                            {ord.items.map((it, i) => (
+                              <span key={it.productId}>
+                                {formatQuantity(it.quantity)}x {it.description}
+                                {i < ord.items.length - 1 ? '; ' : ''}
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* CANHOTO DE RECEBIMENTO */}
+                          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 text-[10px] text-slate-600 items-end">
+                            <div>
+                              <span>Data / Hora Recebimento: ____/____/________ ____:____</span>
+                            </div>
+                            <div>
+                              <span>Nome do Recebedor (Legível): __________________________</span>
+                            </div>
+                            <div className="text-right">
+                              <span>Assinatura: ____________________________________</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* TOTAIS E ASSINATURA DO MOTORISTA */}
+                  <div className="pt-4 border-t-2 border-slate-900 flex justify-between items-center text-xs break-inside-avoid">
+                    <div>
+                      <p>
+                        Total de Entregas: <strong>{printManifest.totalOrders} clientes</strong>
+                      </p>
+                      <p>
+                        Total da Carga: <strong>{formatCurrency(printManifest.totalValue)}</strong> • A Receber: <strong>{formatCurrency(printManifest.totalAmountToCollect)}</strong>
+                      </p>
+                    </div>
+
+                    <div className="text-center">
+                      <div className="w-56 border-b border-slate-900 mb-1" />
+                      <span className="text-[10px] text-slate-600 font-bold">Assinatura do Motorista / Transportador</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* DIVISOR VISUAL NA TELA + QUEBRA DE PÁGINA PARA IMPRESSÃO                  */}
+              {/* ========================================================================= */}
+              {printManifestScope === 'all' && (
+                <div className="print-hidden py-4">
+                  <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-2.5 rounded-xl text-xs font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-2xs">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-amber-600 font-black">📄 [QUEBRA DE PÁGINA]</span>
+                      <span>Fim do Roteiro de Entregas — A próxima seção será impressa em uma folha A4 separada</span>
+                    </span>
+                    <span className="text-[11px] text-amber-800 font-medium">
+                      Página 2: Relação Consolidada de Carregamento & Conferência Armazém
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* PÁGINA 2: RELAÇÃO CONSOLIDADA PARA CARREGAMENTO (CONFERÊNCIA ARMAZÉM)      */}
+              {/* ========================================================================= */}
+              {printManifestScope !== 'roteiro' && (
+                <div
+                  className={`space-y-5 ${
+                    printManifestScope === 'all'
+                      ? 'manifest-page-2 pt-6 border-t-2 border-dashed border-slate-300 print:border-none print:pt-0'
+                      : ''
+                  }`}
+                >
+                  {/* CABEÇALHO DA PÁGINA DE CARREGAMENTO */}
+                  <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-start">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight uppercase">
+                        {currentCompany.tradeName || currentCompany.name}
+                      </h2>
+                      <p className="text-xs text-slate-600">
+                        CNPJ: {currentCompany.cnpjCpf} • Telefone: {currentCompany.phone}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {currentCompany.address.street}, {currentCompany.address.number} - {currentCompany.address.city}/{currentCompany.address.state}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-lg font-mono font-black text-blue-700">
+                        {printManifest.number}
+                      </div>
+                      <div className="text-xs font-bold uppercase text-slate-700">
+                        MAPA DE SEPARAÇÃO & CARREGAMENTO (ARMAZÉM)
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Data da Carga: {printManifest.departureDate}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DADOS DA ROTA E TRANSPORTE (PARA CONFERÊNCIA DO ALMOXARIFADO) */}
+                  <div className="grid grid-cols-4 gap-2.5 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-500 uppercase block text-[10px]">Rota de Destino:</span>
+                      <span className="font-extrabold text-slate-900">{printManifest.routeName}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-500 uppercase block text-[10px]">Motorista Responsável:</span>
+                      <span className="font-extrabold text-slate-900">{printManifest.driverName}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-500 uppercase block text-[10px]">Veículo / Placa:</span>
+                      <span className="font-extrabold text-slate-900 font-mono">
+                        {printManifest.vehiclePlate} ({printManifest.vehicleModel || 'Veículo Próprio'})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-500 uppercase block text-[10px]">Total de Paradas:</span>
+                      <span className="font-extrabold text-blue-800 font-mono">
+                        {printManifest.totalOrders} clientes
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* RELAÇÃO CONSOLIDADA DE PRODUTOS PARA CARREGAMENTO */}
+                  <div className="space-y-2">
+                    <div className="border-b border-slate-300 pb-1 flex justify-between items-baseline">
+                      <h4 className="font-extrabold text-xs uppercase text-slate-900">
+                        2. Relação Consolidada de Produtos para Carregamento (Conferência Armazém):
+                      </h4>
+                      <span className="text-[10px] text-slate-500 font-semibold">
+                        Separação e conferência física no estoque antes da saída do caminhão
+                      </span>
+                    </div>
+
+                    {(() => {
+                      const aggregatedItems = new Map<string, { code: string; desc: string; unit: string; qty: number }>();
+                      printManifest.orders.forEach((o) => {
+                        o.items.forEach((it) => {
+                          const ex = aggregatedItems.get(it.productId);
+                          if (ex) {
+                            ex.qty += it.quantity;
+                          } else {
+                            aggregatedItems.set(it.productId, {
+                              code: it.productCode,
+                              desc: it.description,
+                              unit: it.unit,
+                              qty: it.quantity,
+                            });
+                          }
+                        });
+                      });
+
+                      const itemsList = Array.from(aggregatedItems.values());
+                      const totalItemsCount = itemsList.length;
+                      const totalUnitsSum = itemsList.reduce((s, it) => s + it.qty, 0);
+
+                      return (
+                        <div className="space-y-3">
+                          <table className="w-full text-left text-xs border border-slate-300">
+                            <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-300">
+                              <tr>
+                                <th className="p-2 w-12 text-center">#</th>
+                                <th className="p-2 w-20">Código</th>
+                                <th className="p-2">Descrição da Mercadoria / Produto</th>
+                                <th className="p-2 text-center w-16">Unid</th>
+                                <th className="p-2 text-right w-28">Qtd a Carregar</th>
+                                <th className="p-2 text-center w-24">Conferido [ ✓ ]</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                              {itemsList.map((p, idx) => (
+                                <tr key={p.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                                  <td className="p-2 text-center font-mono text-slate-400 text-[10px]">{idx + 1}</td>
+                                  <td className="p-2 font-mono font-bold text-slate-800">{p.code}</td>
+                                  <td className="p-2 font-medium text-slate-900">{p.desc}</td>
+                                  <td className="p-2 text-center text-slate-600 font-semibold">{p.unit}</td>
+                                  <td className="p-2 text-right font-black font-mono text-slate-900 text-xs">
+                                    {formatQuantity(p.qty)}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <span className="inline-block w-4 h-4 border border-slate-400 rounded-sm" />
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-slate-100 font-extrabold text-xs border-t-2 border-slate-300">
+                                <td colSpan={3} className="p-2 uppercase text-slate-700">
+                                  Total Consolidado da Carga ({totalItemsCount} produtos distintos):
+                                </td>
+                                <td className="p-2 text-center text-slate-500 text-[10px]">VOL</td>
+                                <td className="p-2 text-right font-black font-mono text-blue-800 text-xs">
+                                  {formatQuantity(totalUnitsSum)}
+                                </td>
+                                <td className="p-2 text-center font-bold text-[10px] text-slate-600">
+                                  100% OK
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+
+                          {/* ASSINATURAS DO CARREGAMENTO E ALMOXARIFADO */}
+                          <div className="grid grid-cols-2 gap-8 pt-8 text-center text-xs break-inside-avoid">
+                            <div>
+                              <div className="w-64 mx-auto border-b border-slate-900 mb-1" />
+                              <span className="font-bold text-slate-900 block">Conferente / Almoxarife do Estoque</span>
+                              <span className="text-[10px] text-slate-500">Declaro que a carga acima foi conferida e liberada do armazém</span>
+                            </div>
+
+                            <div>
+                              <div className="w-64 mx-auto border-b border-slate-900 mb-1" />
+                              <span className="font-bold text-slate-900 block">Motorista Responsável pelo Embarque</span>
+                              <span className="text-[10px] text-slate-500">Conferi e recebi a totalidade das mercadorias relacionadas</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

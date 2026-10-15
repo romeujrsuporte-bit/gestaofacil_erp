@@ -10,17 +10,21 @@ import {
   Award,
   Layers,
   FileSpreadsheet,
-  Percent
+  Percent,
+  Printer,
+  FileText
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
+import { A4ReportsPreviewModal, A4ReportType } from './A4ReportsPreviewModal';
 
 export const ReportsView: React.FC = () => {
   const dbState = Database.getState();
   const currentCompany = Database.getCurrentCompany();
 
   const [reportTab, setReportTab] = useState<'vendas' | 'estoque' | 'financeiro' | 'producao'>('vendas');
+  const [a4ReportModal, setA4ReportModal] = useState<A4ReportType | null>(null);
 
   // Vendas da Empresa
   const companyOrders = dbState.orders.filter(
@@ -82,30 +86,46 @@ export const ReportsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
+        <div className="flex items-center flex-wrap gap-2">
+          <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
+            <button
+              onClick={() => setReportTab('vendas')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                reportTab === 'vendas' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Vendas & Canais
+            </button>
+            <button
+              onClick={() => setReportTab('estoque')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                reportTab === 'estoque' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Estoque Crítico ({lowStockProducts.length})
+            </button>
+            <button
+              onClick={() => setReportTab('producao')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                reportTab === 'producao' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Produção Realizada
+            </button>
+          </div>
+
           <button
-            onClick={() => setReportTab('vendas')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              reportTab === 'vendas' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            type="button"
+            onClick={() => {
+              if (reportTab === 'estoque') setA4ReportModal('inventario');
+              else if (reportTab === 'producao') setA4ReportModal('op_modelo');
+              else setA4ReportModal('comissoes_vendedores');
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            title="Visualizar e imprimir este relatório no formato executivo em Folha A4"
           >
-            Vendas & Canais
-          </button>
-          <button
-            onClick={() => setReportTab('estoque')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              reportTab === 'estoque' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Estoque Crítico ({lowStockProducts.length})
-          </button>
-          <button
-            onClick={() => setReportTab('producao')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              reportTab === 'producao' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Produção Realizada
+            <Printer size={14} />
+            <span>Imprimir em Folha A4</span>
           </button>
         </div>
       </div>
@@ -331,6 +351,15 @@ export const ReportsView: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* Modal de Impressão de Relatórios em Folha A4 */}
+      {a4ReportModal && (
+        <A4ReportsPreviewModal
+          isOpen={!!a4ReportModal}
+          onClose={() => setA4ReportModal(null)}
+          reportType={a4ReportModal}
+        />
       )}
     </div>
   );

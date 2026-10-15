@@ -37,6 +37,7 @@ export interface Company {
   name: string;
   tradeName: string;
   cnpjCpf: string;
+  ie?: string;
   type: 'matriz' | 'filial';
   phone: string;
   email: string;
@@ -231,6 +232,7 @@ export interface OrderItem {
   id: string;
   productId: string;
   productCode: string;
+  code?: string;
   description: string;
   unit: UnitOfMeasure;
   quantity: number;
@@ -266,6 +268,8 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   discountTotal: number;
+  freightTotal?: number;
+  additionTotal?: number;
   total: number;
   paymentMethod: 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito' | 'boleto' | 'crediario' | 'multiplo';
   multiplePayments?: {
@@ -303,6 +307,7 @@ export interface CashRegister {
   companyId: string;
   userId: string;
   userName: string;
+  terminalNumber?: string;
   openedAt: string;
   closedAt?: string;
   initialBalance: number;
@@ -476,6 +481,9 @@ export interface ProductionOrder {
   productId: string;
   productCode: string;
   productDescription: string;
+  unit?: string;
+  startDate?: string;
+  dueDate?: string;
   plannedQuantity: number;
   producedQuantity: number;
   destinationLocationId: string;
@@ -553,8 +561,12 @@ export interface AuditLog {
 
 export type ThermalPaperWidth = '58mm' | '80mm';
 export type HeaderFormatType = 'completo' | 'simplificado' | 'compacto' | 'personalizado';
+export type PrintDocumentFormat = 'a4' | 'thermal';
+export type A4HeaderStyle = 'classico_timbrado' | 'moderno_minimalista' | 'corporativo';
+export type A4MarginType = 'compacta' | 'padrao' | 'ampla';
 
 export interface ThermalPrinterConfig {
+  // Configurações de Impressora Térmica
   paperWidth: ThermalPaperWidth;
   headerFormat: HeaderFormatType;
   headerAlignment: 'center' | 'left';
@@ -568,6 +580,24 @@ export interface ThermalPrinterConfig {
   marginRight: number; // in mm
   fontSize: 'pequena' | 'normal' | 'grande';
   autoCut: boolean;
+
+  // Configurações de Impressão em Folha A4
+  a4HeaderStyle?: A4HeaderStyle;
+  a4ShowLogo?: boolean;
+  a4ShowReceiptStub?: boolean; // Canhoto de recebimento/entrega para assinatura
+  a4ShowFinancialSummary?: boolean; // Quadro de resumo financeiro e condições
+  a4ShowCommercialTerms?: boolean; // Termos de garantia e validade da proposta
+  a4CommercialTermsText?: string;
+  a4ShowSignatures?: boolean;
+  a4Margin?: A4MarginType;
+  a4Orientation?: 'portrait' | 'landscape';
+
+  // Padrão de Impressão por Módulo do ERP (A4 vs Térmico 80mm)
+  defaultSalesOrderFormat?: PrintDocumentFormat;
+  defaultExternalSalesFormat?: PrintDocumentFormat;
+  defaultProductionOrderFormat?: PrintDocumentFormat;
+  defaultManifestFormat?: PrintDocumentFormat;
+  defaultPosFormat?: PrintDocumentFormat;
 }
 
 export type PaymentMethodType = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito' | 'boleto' | 'crediario' | 'outro';
@@ -718,5 +748,59 @@ export interface DeliveryManifest {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+}
+
+// ==========================================
+// CADASTRO DE LOCALIDADES (PRAÇA, BAIRRO, CIDADE, ESTADO)
+// ==========================================
+
+export interface MarketAreaItem {
+  id: string;
+  name: string; // Ex: "Zona Norte", "Centro Expandido", "Zona Sul / ABC"
+  description?: string;
+  defaultRouteId?: string; // ID da Rota de Entrega vinculada
+  defaultRouteName?: string; // Nome da Rota vinculada
+  cities?: string[]; // Nomes de cidades atendidas
+  active: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface StateItem {
+  id: string;
+  uf: string; // Ex: "SP", "RJ", "MG"
+  name: string; // Ex: "São Paulo", "Rio de Janeiro"
+  region: 'Sudeste' | 'Sul' | 'Centro-Oeste' | 'Nordeste' | 'Norte';
+  active: boolean;
+  createdAt: string;
+}
+
+export interface CityItem {
+  id: string;
+  name: string; // Ex: "São Paulo", "Campinas", "Guarulhos"
+  stateUf: string; // Ex: "SP"
+  marketAreaId?: string; // ID da Praça vinculada
+  marketAreaName?: string; // Nome da Praça vinculada (ex: "Zona Sul / ABC")
+  defaultRouteId?: string; // Rota padrão de entrega
+  defaultRouteName?: string;
+  ibgeCode?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface NeighborhoodItem {
+  id: string;
+  name: string; // Ex: "Santana", "Pinheiros", "Moema"
+  cityName: string; // Ex: "São Paulo"
+  stateUf: string; // Ex: "SP"
+  marketAreaId?: string; // ID da Praça vinculada
+  marketAreaName?: string; // Nome da Praça vinculada
+  defaultRouteId?: string; // Rota padrão de entrega
+  defaultRouteName?: string;
+  zipCodePrefix?: string; // Prefixo CEP (ex: "020", "014")
+  active: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 

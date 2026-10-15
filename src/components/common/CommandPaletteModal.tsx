@@ -270,11 +270,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     },
     {
       id: 'settings-printer',
-      title: 'Configuração da Impressora Térmica (58mm / 80mm & Margens)',
+      title: 'Configuração de Impressão (Folha A4 & Térmica 80mm)',
       category: 'Configurações',
       targetModule: 'settings_printer',
       icon: <Printer size={16} className="text-emerald-600" />,
-      keywords: ['impressora', 'termica', 'cupom', 'bobina', '80mm', '58mm', 'margem', 'cabecalho'],
+      keywords: ['impressora', 'impressao', 'a4', 'folha a4', 'relatorios', 'termica', 'cupom', 'bobina', '80mm', '58mm', 'margem', 'cabecalho'],
     },
     {
       id: 'dashboard',

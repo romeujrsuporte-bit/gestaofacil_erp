@@ -32,6 +32,10 @@ import {
   DeliveryManifest,
   DeliveryManifestOrder,
   DeliveryManifestOrderItem,
+  MarketAreaItem,
+  StateItem,
+  CityItem,
+  NeighborhoodItem,
 } from '../types';
 
 export const DEFAULT_PRINTER_CONFIG: ThermalPrinterConfig = {
@@ -48,6 +52,20 @@ export const DEFAULT_PRINTER_CONFIG: ThermalPrinterConfig = {
   marginRight: 2,
   fontSize: 'normal',
   autoCut: true,
+  a4HeaderStyle: 'classico_timbrado',
+  a4ShowLogo: true,
+  a4ShowReceiptStub: true,
+  a4ShowFinancialSummary: true,
+  a4ShowCommercialTerms: true,
+  a4CommercialTermsText: 'Orçamento/Pedido válido por 10 dias úteis. As mercadorias devem ser conferidas no ato da entrega. Garantia legal de 90 dias conforme CDC.',
+  a4ShowSignatures: true,
+  a4Margin: 'padrao',
+  a4Orientation: 'portrait',
+  defaultSalesOrderFormat: 'a4',
+  defaultExternalSalesFormat: 'a4',
+  defaultProductionOrderFormat: 'a4',
+  defaultManifestFormat: 'a4',
+  defaultPosFormat: 'thermal',
 };
 
 const DB_KEY_PREFIX = 'omnicomercio_v1_';
@@ -82,6 +100,10 @@ export interface DatabaseState {
   sidebarMenuConfig?: SidebarMenuConfig;
   deliveryRoutes?: DeliveryRoute[];
   deliveryManifests?: DeliveryManifest[];
+  marketAreas?: MarketAreaItem[];
+  states?: StateItem[];
+  cities?: CityItem[];
+  neighborhoods?: NeighborhoodItem[];
 }
 
 export const DEFAULT_PAYMENT_METHODS: PaymentMethodRecord[] = [
@@ -457,6 +479,136 @@ export const DEFAULT_DELIVERY_ROUTES: DeliveryRoute[] = [
     createdAt: '2026-10-01T10:00:00.000Z',
     updatedAt: '2026-10-01T10:00:00.000Z',
   },
+];
+
+export const DEFAULT_STATES: StateItem[] = [
+  { id: 'uf-sp', uf: 'SP', name: 'São Paulo', region: 'Sudeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-rj', uf: 'RJ', name: 'Rio de Janeiro', region: 'Sudeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-mg', uf: 'MG', name: 'Minas Gerais', region: 'Sudeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-es', uf: 'ES', name: 'Espírito Santo', region: 'Sudeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-pr', uf: 'PR', name: 'Paraná', region: 'Sul', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-sc', uf: 'SC', name: 'Santa Catarina', region: 'Sul', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-rs', uf: 'RS', name: 'Rio Grande do Sul', region: 'Sul', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-df', uf: 'DF', name: 'Distrito Federal', region: 'Centro-Oeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-go', uf: 'GO', name: 'Goiás', region: 'Centro-Oeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-mt', uf: 'MT', name: 'Mato Grosso', region: 'Centro-Oeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-ms', uf: 'MS', name: 'Mato Grosso do Sul', region: 'Centro-Oeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-ba', uf: 'BA', name: 'Bahia', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-pe', uf: 'PE', name: 'Pernambuco', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-ce', uf: 'CE', name: 'Ceará', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-rn', uf: 'RN', name: 'Rio Grande do Norte', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-pb', uf: 'PB', name: 'Paraíba', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-al', uf: 'AL', name: 'Alagoas', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-se', uf: 'SE', name: 'Sergipe', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-ma', uf: 'MA', name: 'Maranhão', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-pi', uf: 'PI', name: 'Piauí', region: 'Nordeste', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-pa', uf: 'PA', name: 'Pará', region: 'Norte', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-am', uf: 'AM', name: 'Amazonas', region: 'Norte', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-ro', uf: 'RO', name: 'Rondônia', region: 'Norte', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-to', uf: 'TO', name: 'Tocantins', region: 'Norte', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-ac', uf: 'AC', name: 'Acre', region: 'Norte', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-ap', uf: 'AP', name: 'Amapá', region: 'Norte', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'uf-rr', uf: 'RR', name: 'Roraima', region: 'Norte', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+];
+
+export const DEFAULT_MARKET_AREAS: MarketAreaItem[] = [
+  {
+    id: 'pra-01',
+    name: 'Zona Norte',
+    description: 'Bairros da Zona Norte da capital e conexão com Guarulhos',
+    defaultRouteId: 'rot-01',
+    defaultRouteName: 'Rota 01 - Zona Norte & Santana',
+    cities: ['São Paulo', 'Guarulhos'],
+    active: true,
+    createdAt: '2026-10-01T10:00:00.000Z',
+  },
+  {
+    id: 'pra-02',
+    name: 'Centro',
+    description: 'Centro Expandido de SP, Avenida Paulista e polos corporativos',
+    defaultRouteId: 'rot-02',
+    defaultRouteName: 'Rota 02 - Centro Expandido & Paulista',
+    cities: ['São Paulo'],
+    active: true,
+    createdAt: '2026-10-01T10:00:00.000Z',
+  },
+  {
+    id: 'pra-03',
+    name: 'Zona Sul / ABC',
+    description: 'Zona Sul da capital e polos industriais do Grande ABC',
+    defaultRouteId: 'rot-03',
+    defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista',
+    cities: ['São Paulo', 'Santo André', 'São Bernardo do Campo', 'São Caetano do Sul', 'Diadema'],
+    active: true,
+    createdAt: '2026-10-01T10:00:00.000Z',
+  },
+  {
+    id: 'pra-04',
+    name: 'Interior SP',
+    description: 'Região metropolitana de Campinas, Jundiaí e Circuito das Frutas',
+    defaultRouteId: 'rot-04',
+    defaultRouteName: 'Rota 04 - Interior & Campinas',
+    cities: ['Campinas', 'Jundiaí', 'Valinhos', 'Vinhedo'],
+    active: true,
+    createdAt: '2026-10-01T10:00:00.000Z',
+  },
+  {
+    id: 'pra-05',
+    name: 'Litoral Paulista',
+    description: 'Baixada Santista e cidades litorâneas',
+    cities: ['Santos', 'São Vicente', 'Praia Grande'],
+    active: true,
+    createdAt: '2026-10-01T10:00:00.000Z',
+  },
+  {
+    id: 'pra-06',
+    name: 'Vale do Paraíba',
+    description: 'Eixo Dutra entre São José dos Campos, Taubaté e Jacareí',
+    cities: ['São José dos Campos', 'Taubaté', 'Jacareí'],
+    active: true,
+    createdAt: '2026-10-01T10:00:00.000Z',
+  },
+];
+
+export const DEFAULT_CITIES: CityItem[] = [
+  { id: 'cid-01', name: 'São Paulo', stateUf: 'SP', marketAreaId: 'pra-01', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', ibgeCode: '3550308', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-02', name: 'Guarulhos', stateUf: 'SP', marketAreaId: 'pra-01', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', ibgeCode: '3518800', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-03', name: 'Santo André', stateUf: 'SP', marketAreaId: 'pra-03', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', ibgeCode: '3547809', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-04', name: 'São Bernardo do Campo', stateUf: 'SP', marketAreaId: 'pra-03', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', ibgeCode: '3548708', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-05', name: 'São Caetano do Sul', stateUf: 'SP', marketAreaId: 'pra-03', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', ibgeCode: '3548807', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-06', name: 'Diadema', stateUf: 'SP', marketAreaId: 'pra-03', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', ibgeCode: '3513801', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-07', name: 'Campinas', stateUf: 'SP', marketAreaId: 'pra-04', marketAreaName: 'Interior SP', defaultRouteId: 'rot-04', defaultRouteName: 'Rota 04 - Interior & Campinas', ibgeCode: '3509502', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-08', name: 'Jundiaí', stateUf: 'SP', marketAreaId: 'pra-04', marketAreaName: 'Interior SP', defaultRouteId: 'rot-04', defaultRouteName: 'Rota 04 - Interior & Campinas', ibgeCode: '3525904', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-09', name: 'Valinhos', stateUf: 'SP', marketAreaId: 'pra-04', marketAreaName: 'Interior SP', defaultRouteId: 'rot-04', defaultRouteName: 'Rota 04 - Interior & Campinas', ibgeCode: '3556206', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-10', name: 'Vinhedo', stateUf: 'SP', marketAreaId: 'pra-04', marketAreaName: 'Interior SP', defaultRouteId: 'rot-04', defaultRouteName: 'Rota 04 - Interior & Campinas', ibgeCode: '3556701', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-11', name: 'Santos', stateUf: 'SP', marketAreaId: 'pra-05', marketAreaName: 'Litoral Paulista', ibgeCode: '3548500', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-12', name: 'São José dos Campos', stateUf: 'SP', marketAreaId: 'pra-06', marketAreaName: 'Vale do Paraíba', ibgeCode: '3549904', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-13', name: 'Rio de Janeiro', stateUf: 'RJ', marketAreaName: 'Capital RJ', ibgeCode: '3304557', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-14', name: 'Belo Horizonte', stateUf: 'MG', marketAreaName: 'Grande BH', ibgeCode: '3106200', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'cid-15', name: 'Curitiba', stateUf: 'PR', marketAreaName: 'Capital PR', ibgeCode: '4106902', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+];
+
+export const DEFAULT_NEIGHBORHOODS: NeighborhoodItem[] = [
+  { id: 'bai-01', name: 'Santana', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-02', name: 'Vila Guilherme', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-03', name: 'Tucuruvi', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-04', name: 'Parque Novo Mundo', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-05', name: 'Vila Maria', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-06', name: 'Vila Bela', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Norte', defaultRouteId: 'rot-01', defaultRouteName: 'Rota 01 - Zona Norte & Santana', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-07', name: 'Cerqueira César', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Centro', defaultRouteId: 'rot-02', defaultRouteName: 'Rota 02 - Centro Expandido & Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-08', name: 'Bela Vista', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Centro', defaultRouteId: 'rot-02', defaultRouteName: 'Rota 02 - Centro Expandido & Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-09', name: 'Consolação', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Centro', defaultRouteId: 'rot-02', defaultRouteName: 'Rota 02 - Centro Expandido & Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-10', name: 'República', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Centro', defaultRouteId: 'rot-02', defaultRouteName: 'Rota 02 - Centro Expandido & Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-11', name: 'Santa Cecília', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Centro', defaultRouteId: 'rot-02', defaultRouteName: 'Rota 02 - Centro Expandido & Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-12', name: 'Moema', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-13', name: 'Vila Mariana', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-14', name: 'Saúde', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-15', name: 'Ipiranga', cityName: 'São Paulo', stateUf: 'SP', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-16', name: 'Rudge Ramos', cityName: 'São Bernardo do Campo', stateUf: 'SP', marketAreaName: 'Zona Sul / ABC', defaultRouteId: 'rot-03', defaultRouteName: 'Rota 03 - Zona Sul & ABC Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-17', name: 'Cambuí', cityName: 'Campinas', stateUf: 'SP', marketAreaName: 'Interior SP', defaultRouteId: 'rot-04', defaultRouteName: 'Rota 04 - Interior & Campinas', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-18', name: 'Barão Geraldo', cityName: 'Campinas', stateUf: 'SP', marketAreaName: 'Interior SP', defaultRouteId: 'rot-04', defaultRouteName: 'Rota 04 - Interior & Campinas', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-19', name: 'Centro', cityName: 'Campinas', stateUf: 'SP', marketAreaName: 'Interior SP', defaultRouteId: 'rot-04', defaultRouteName: 'Rota 04 - Interior & Campinas', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 'bai-20', name: 'Gonzaga', cityName: 'Santos', stateUf: 'SP', marketAreaName: 'Litoral Paulista', active: true, createdAt: '2026-10-01T10:00:00.000Z' },
 ];
 
 export const DEFAULT_DELIVERY_MANIFESTS: DeliveryManifest[] = [
@@ -1478,6 +1630,8 @@ export class Database {
     const s = this.getState();
     if (!s.printerConfig) {
       s.printerConfig = { ...DEFAULT_PRINTER_CONFIG };
+    } else {
+      s.printerConfig = { ...DEFAULT_PRINTER_CONFIG, ...s.printerConfig };
     }
     return s.printerConfig;
   }

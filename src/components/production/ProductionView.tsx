@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
+  Printer,
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import {
@@ -39,6 +40,7 @@ import {
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { toast } from '../../services/toast';
+import { ProductionOrderPrintModal } from './ProductionOrderPrintModal';
 
 export interface OpDraftItem {
   id: string;
@@ -167,6 +169,7 @@ export const ProductionView: React.FC<{
   const [opEndDate, setOpEndDate] = useState<string>('');
   const [expandedOpId, setExpandedOpId] = useState<string | null>(null);
   const [selectedOpDetails, setSelectedOpDetails] = useState<ProductionOrder | null>(null);
+  const [selectedOpForPrint, setSelectedOpForPrint] = useState<ProductionOrder | null>(null);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState<boolean>(false);
 
   // Lista de Componentes cadastrados no sistema
@@ -2295,9 +2298,19 @@ export const ProductionView: React.FC<{
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
+                              onClick={() => setSelectedOpForPrint(op)}
+                              className="flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-200 transition-colors cursor-pointer"
+                              title="Imprimir Ordem de Produção em Folha A4 ou Cupom Térmico"
+                            >
+                              <Printer size={12} />
+                              <span className="hidden sm:inline">Imprimir A4</span>
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => setSelectedOpDetails(op)}
                               className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                              title="Visualizar ficha técnica e imprimir OP"
+                              title="Visualizar ficha técnica e detalhes da OP"
                             >
                               <Eye size={12} />
                               <span className="hidden sm:inline">Ficha OP</span>
@@ -2527,17 +2540,28 @@ export const ProductionView: React.FC<{
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg cursor-pointer text-xs flex items-center gap-1.5 shadow-xs"
+                  onClick={() => setSelectedOpForPrint(op)}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg cursor-pointer text-xs flex items-center gap-1.5 shadow-xs"
+                  title="Abrir opções de impressão em Folha A4 ou Cupom Térmico"
                 >
-                  <Eye size={14} />
-                  <span>Imprimir Comprovante OP</span>
+                  <Printer size={14} />
+                  <span>Imprimir em Folha A4 / Térmica</span>
                 </button>
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* Modal de Impressão de Ordem de Produção (Folha A4 & Térmica 80mm) */}
+      {selectedOpForPrint && (
+        <ProductionOrderPrintModal
+          order={selectedOpForPrint}
+          company={currentCompany}
+          isOpen={!!selectedOpForPrint}
+          onClose={() => setSelectedOpForPrint(null)}
+        />
+      )}
     </div>
   );
 };

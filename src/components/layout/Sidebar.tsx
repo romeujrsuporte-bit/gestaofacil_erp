@@ -235,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'settings_supabase', label: 'Banco Supabase (Nuvem)' },
         { id: 'settings_menus', label: 'Menus do Sistema' },
         { id: 'settings_preferences', label: 'Preferências & Alertas' },
-        { id: 'settings_printer', label: 'Impressora Térmica' },
+        { id: 'settings_printer', label: 'Configuração de Impressão' },
       ],
     },
   ];
