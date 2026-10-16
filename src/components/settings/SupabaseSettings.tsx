@@ -501,7 +501,7 @@ export const SupabaseSettings: React.FC = () => {
           )}
           {sqlMode === 'complete' && (
             <p className="text-slate-700 leading-relaxed">
-              <strong>Finalidade:</strong> Script master com 100% de todas as 14 tabelas do Omnicomércio ERP com DDL completo, tipos compatíveis com PostgreSQL e todas as políticas RLS blindadas desde a primeira execução.
+              <strong>Finalidade:</strong> Script master com 100% de todas as 14 tabelas do GestãoFácil ERP com DDL completo, tipos compatíveis com PostgreSQL e todas as políticas RLS blindadas desde a primeira execução.
             </p>
           )}
         </div>
@@ -604,7 +604,7 @@ export const SupabaseSettings: React.FC = () => {
                   ? 'supabase_rls_security_fix.sql'
                   : sqlMode === 'missing'
                   ? 'supabase_missing_erp_tables.sql'
-                  : 'omnicomercio_supabase_schema.sql'}
+                  : 'gestaofacil_supabase_schema.sql'}
               </span>
               <button
                 type="button"

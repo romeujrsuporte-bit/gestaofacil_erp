@@ -40,6 +40,18 @@ export const CrmView: React.FC<{ initialSubTab?: 'clientes' | 'fornecedores' }> 
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
 
   // Form Clientes
+  const [manualAddressInput, setManualAddressInput] = useState<{
+    state: boolean;
+    city: boolean;
+    neighborhood: boolean;
+    marketArea: boolean;
+  }>({
+    state: false,
+    city: false,
+    neighborhood: false,
+    marketArea: false,
+  });
+
   const [custForm, setCustForm] = useState<Partial<Customer>>({
     code: '',
     name: '',
@@ -613,47 +625,193 @@ export const CrmView: React.FC<{ initialSubTab?: 'clientes' | 'fornecedores' }> 
                 />
               </div>
 
+              {/* ESTADO / UF */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Bairro</label>
-                <input
-                  type="text"
-                  value={custForm.neighborhood || ''}
-                  onChange={(e) => setCustForm({ ...custForm, neighborhood: e.target.value })}
-                  placeholder="Ex: Santana, Cerqueira César"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block font-bold text-slate-700">Estado / UF</label>
+                  <button
+                    type="button"
+                    onClick={() => setManualAddressInput((prev) => ({ ...prev, state: !prev.state }))}
+                    className="text-[10px] text-blue-600 hover:underline font-semibold"
+                  >
+                    {manualAddressInput.state ? 'Selecionar da Lista' : 'Digitar Manual'}
+                  </button>
+                </div>
+                {manualAddressInput.state ? (
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={custForm.state || ''}
+                    onChange={(e) => setCustForm({ ...custForm, state: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
+                    placeholder="Ex: SP"
+                  />
+                ) : (
+                  <select
+                    value={custForm.state || 'SP'}
+                    onChange={(e) => {
+                      const newUf = e.target.value;
+                      setCustForm({ ...custForm, state: newUf });
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  >
+                    <option value="">Selecione o Estado (UF)...</option>
+                    {(dbState.states || []).map((st) => (
+                      <option key={st.id} value={st.uf}>
+                        {st.uf} - {st.name} ({st.region})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
+              {/* CIDADE */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Cidade</label>
-                <input
-                  type="text"
-                  value={custForm.city}
-                  onChange={(e) => setCustForm({ ...custForm, city: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block font-bold text-slate-700">Cidade</label>
+                  <button
+                    type="button"
+                    onClick={() => setManualAddressInput((prev) => ({ ...prev, city: !prev.city }))}
+                    className="text-[10px] text-blue-600 hover:underline font-semibold"
+                  >
+                    {manualAddressInput.city ? 'Selecionar da Lista' : 'Digitar Manual'}
+                  </button>
+                </div>
+                {manualAddressInput.city ? (
+                  <input
+                    type="text"
+                    value={custForm.city || ''}
+                    onChange={(e) => setCustForm({ ...custForm, city: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                    placeholder="Ex: São Paulo"
+                  />
+                ) : (
+                  <select
+                    value={custForm.city || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setCustForm({ ...custForm, city: '' });
+                        return;
+                      }
+                      const foundCity = (dbState.cities || []).find((c) => c.name.toLowerCase() === val.toLowerCase());
+                      setCustForm((prev) => ({
+                        ...prev,
+                        city: val,
+                        state: foundCity?.stateUf || prev.state || 'SP',
+                        marketArea: prev.marketArea || foundCity?.marketAreaName || '',
+                        deliveryRouteId: prev.deliveryRouteId || foundCity?.defaultRouteId || '',
+                      }));
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  >
+                    <option value="">Selecione a Cidade...</option>
+                    {(dbState.cities || [])
+                      .filter((c) => !custForm.state || c.stateUf === custForm.state)
+                      .map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name} ({c.stateUf}){c.marketAreaName ? ` • Praça: ${c.marketAreaName}` : ''}
+                        </option>
+                      ))}
+                  </select>
+                )}
               </div>
 
+              {/* BAIRRO */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">UF</label>
-                <input
-                  type="text"
-                  maxLength={2}
-                  value={custForm.state}
-                  onChange={(e) => setCustForm({ ...custForm, state: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block font-bold text-slate-700">Bairro</label>
+                  <button
+                    type="button"
+                    onClick={() => setManualAddressInput((prev) => ({ ...prev, neighborhood: !prev.neighborhood }))}
+                    className="text-[10px] text-blue-600 hover:underline font-semibold"
+                  >
+                    {manualAddressInput.neighborhood ? 'Selecionar da Lista' : 'Digitar Manual'}
+                  </button>
+                </div>
+                {manualAddressInput.neighborhood ? (
+                  <input
+                    type="text"
+                    value={custForm.neighborhood || ''}
+                    onChange={(e) => setCustForm({ ...custForm, neighborhood: e.target.value })}
+                    placeholder="Ex: Santana, Cerqueira César"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                  />
+                ) : (
+                  <select
+                    value={custForm.neighborhood || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setCustForm({ ...custForm, neighborhood: '' });
+                        return;
+                      }
+                      const foundNeigh = (dbState.neighborhoods || []).find((n) => n.name.toLowerCase() === val.toLowerCase());
+                      setCustForm((prev) => ({
+                        ...prev,
+                        neighborhood: val,
+                        city: prev.city || foundNeigh?.cityName || '',
+                        state: prev.state || foundNeigh?.stateUf || 'SP',
+                        marketArea: prev.marketArea || foundNeigh?.marketAreaName || '',
+                        deliveryRouteId: prev.deliveryRouteId || foundNeigh?.defaultRouteId || '',
+                      }));
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  >
+                    <option value="">Selecione o Bairro...</option>
+                    {(dbState.neighborhoods || [])
+                      .filter((n) => !custForm.city || n.cityName.toLowerCase() === custForm.city.toLowerCase())
+                      .map((n) => (
+                        <option key={n.id} value={n.name}>
+                          {n.name} ({n.cityName})
+                        </option>
+                      ))}
+                  </select>
+                )}
               </div>
 
+              {/* PRAÇA / REGIÃO COMERCIAL */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Praça / Região Comercial</label>
-                <input
-                  type="text"
-                  value={custForm.marketArea || ''}
-                  onChange={(e) => setCustForm({ ...custForm, marketArea: e.target.value })}
-                  placeholder="Ex: Zona Norte, Centro, ABC"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block font-bold text-slate-700">Praça / Região Comercial</label>
+                  <button
+                    type="button"
+                    onClick={() => setManualAddressInput((prev) => ({ ...prev, marketArea: !prev.marketArea }))}
+                    className="text-[10px] text-blue-600 hover:underline font-semibold"
+                  >
+                    {manualAddressInput.marketArea ? 'Selecionar da Lista' : 'Digitar Manual'}
+                  </button>
+                </div>
+                {manualAddressInput.marketArea ? (
+                  <input
+                    type="text"
+                    value={custForm.marketArea || ''}
+                    onChange={(e) => setCustForm({ ...custForm, marketArea: e.target.value })}
+                    placeholder="Ex: Zona Norte, Centro, ABC"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                  />
+                ) : (
+                  <select
+                    value={custForm.marketArea || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const foundPra = (dbState.marketAreas || []).find((m) => m.name === val);
+                      setCustForm((prev) => ({
+                        ...prev,
+                        marketArea: val,
+                        deliveryRouteId: prev.deliveryRouteId || foundPra?.defaultRouteId || '',
+                      }));
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  >
+                    <option value="">Selecione a Praça Comercial...</option>
+                    {(dbState.marketAreas || []).map((m) => (
+                      <option key={m.id} value={m.name}>
+                        {m.name} {m.description ? `(${m.description})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>

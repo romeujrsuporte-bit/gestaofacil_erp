@@ -296,7 +296,15 @@ export default function App() {
       case 'delivery_manifests':
         return <ExpeditionView initialTab="romaneios" />;
       case 'delivery_routes':
-        return <ExpeditionView initialTab="rotas" />;
+        return <ExpeditionView initialTab="rotas" initialRouteSubTab="rotas" />;
+      case 'delivery_market_areas':
+        return <ExpeditionView initialTab="rotas" initialRouteSubTab="pracas" />;
+      case 'delivery_neighborhoods':
+        return <ExpeditionView initialTab="rotas" initialRouteSubTab="bairros" />;
+      case 'delivery_cities':
+        return <ExpeditionView initialTab="rotas" initialRouteSubTab="cidades" />;
+      case 'delivery_states':
+        return <ExpeditionView initialTab="rotas" initialRouteSubTab="estados" />;
       case 'expedition_reports':
         return <ExpeditionView initialTab="relatorios" />;
       case 'expedicao':

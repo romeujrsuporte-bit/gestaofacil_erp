@@ -757,7 +757,7 @@ export class SupabaseService {
    */
   public static generateSqlSchema(): string {
     return `-- =========================================================================
--- OMNICOMÉRCIO ERP - SCRIPT COMPLETO DE CRIAÇÃO DE TABELAS PARA SUPABASE
+-- GESTAOFACIL ERP - SCRIPT COMPLETO DE CRIAÇÃO DE TABELAS PARA SUPABASE
 -- Execute este script no SQL Editor do seu projeto Supabase:
 -- https://supabase.com/dashboard/project/qtnlzojhksooztmsdoen/sql
 -- =========================================================================
@@ -1174,7 +1174,7 @@ drop policy if exists "accounts_payable_update" on public.accounts_payable for u
    */
   public static generateHardenedRlsFixForFiveTables(): string {
     return `-- =========================================================================
--- OMNICOMÉRCIO ERP - CORREÇÃO DE VULNERABILIDADES RLS (5 TABELAS ATUAIS)
+-- GESTAOFACIL ERP - CORREÇÃO DE VULNERABILIDADES RLS (5 TABELAS ATUAIS)
 -- Execute este script no SQL Editor do Supabase para blindar suas tabelas:
 -- https://supabase.com/dashboard/project/qtnlzojhksooztmsdoen/sql
 -- =========================================================================
@@ -1316,7 +1316,7 @@ create policy "delivery_manifests_update" on public.delivery_manifests
    */
   public static generateMissingTablesSql(): string {
     return `-- =========================================================================
--- OMNICOMÉRCIO ERP - TABELAS COMPLEMENTARES FALTANTES DO SISTEMA
+-- GESTAOFACIL ERP - TABELAS COMPLEMENTARES FALTANTES DO SISTEMA
 -- Execute este script para adicionar os módulos de Vendas, Estoque, Financeiro e Produção
 -- https://supabase.com/dashboard/project/qtnlzojhksooztmsdoen/sql
 -- =========================================================================

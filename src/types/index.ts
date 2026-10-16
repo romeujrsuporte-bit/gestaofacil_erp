@@ -1,5 +1,5 @@
 /**
- * Definições de Tipos do Sistema OmniComércio ERP & PDV
+ * Definições de Tipos do Sistema GestãoFácil ERP
  */
 
 export type UserRole = 'admin' | 'gerente' | 'balconista' | 'vendedor_externo' | 'financeiro';
@@ -17,6 +17,18 @@ export interface UserPermissions {
   canManageUsers: boolean;
   canAdjustStock: boolean;
   canCloseCashRegister: boolean;
+
+  // VISIBILIDADE DE INFORMAÇÕES & NÚMEROS DA EMPRESA (KPIS FINANCEIROS)
+  canViewGrossProfit?: boolean;    // Visualizar Lucro Bruto (R$ e Margem Bruta)
+  canViewNetProfit?: boolean;      // Visualizar Lucro Líquido & DRE (R$)
+  canViewTotalRevenue?: boolean;   // Visualizar Faturamento / Receita Total da Empresa
+  canViewProfitMargin?: boolean;   // Visualizar Margem de Lucro (%) & Markup
+  canViewProductCosts?: boolean;   // Visualizar Custos de Aquisição & CMV dos Produtos
+  canViewCashBalances?: boolean;   // Visualizar Saldos Bancários, Caixa e Previsões (A Pagar/Receber)
+
+  // CONTROLE GRANULAR DE MENUS E SUBMENUS PERMITIDOS
+  allowedMenuSections?: string[];  // IDs das seções/menus principais permitidos para o usuário
+  allowedSubItems?: string[];      // IDs dos submódulos permitidos para o usuário
 }
 
 export interface User {

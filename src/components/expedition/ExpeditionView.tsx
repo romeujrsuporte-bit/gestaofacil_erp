@@ -33,6 +33,8 @@ import {
   FileSpreadsheet,
   Navigation,
   Compass,
+  Landmark,
+  Globe,
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import {
@@ -42,15 +44,23 @@ import {
   DeliveryManifestOrderItem,
   Customer,
   Order,
+  MarketAreaItem,
+  CityItem,
+  NeighborhoodItem,
+  StateItem,
 } from '../../types';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { toast } from '../../services/toast';
 
 interface ExpeditionViewProps {
   initialTab?: 'romaneios' | 'rotas' | 'relatorios';
+  initialRouteSubTab?: 'rotas' | 'pracas' | 'bairros' | 'cidades' | 'estados';
 }
 
-export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'romaneios' }) => {
+export const ExpeditionView: React.FC<ExpeditionViewProps> = ({
+  initialTab = 'romaneios',
+  initialRouteSubTab = 'rotas',
+}) => {
   const currentCompany = Database.getCurrentCompany();
   const [dbState, setDbState] = useState(Database.getState());
 
@@ -141,6 +151,124 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
   const [batchSelectedCustomerIds, setBatchSelectedCustomerIds] = useState<string[]>([]);
   const [customerFilterRoute, setCustomerFilterRoute] = useState('todos');
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  // ==========================================
+  // ESTADOS - SUB-ABAS DE ROTAS & LOCALIDADES
+  // ==========================================
+  const [routeSubTab, setRouteSubTab] = useState<'rotas' | 'pracas' | 'bairros' | 'cidades' | 'estados'>(
+    initialRouteSubTab
+  );
+
+  useEffect(() => {
+    if (initialRouteSubTab) {
+      setRouteSubTab(initialRouteSubTab);
+    }
+  }, [initialRouteSubTab]);
+
+  // Praças Comerciais
+  const [marketAreaSearchTerm, setMarketAreaSearchTerm] = useState('');
+  const [isMarketAreaModalOpen, setIsMarketAreaModalOpen] = useState(false);
+  const [editingMarketArea, setEditingMarketArea] = useState<MarketAreaItem | null>(null);
+  const [marketAreaFormName, setMarketAreaFormName] = useState('');
+  const [marketAreaFormDescription, setMarketAreaFormDescription] = useState('');
+  const [marketAreaFormDefaultRouteId, setMarketAreaFormDefaultRouteId] = useState('');
+  const [marketAreaFormCities, setMarketAreaFormCities] = useState('');
+  const [marketAreaFormActive, setMarketAreaFormActive] = useState(true);
+
+  // Bairros
+  const [neighborhoodSearchTerm, setNeighborhoodSearchTerm] = useState('');
+  const [neighborhoodCityFilter, setNeighborhoodCityFilter] = useState('todos');
+  const [neighborhoodStateFilter, setNeighborhoodStateFilter] = useState('todos');
+  const [isNeighborhoodModalOpen, setIsNeighborhoodModalOpen] = useState(false);
+  const [editingNeighborhood, setEditingNeighborhood] = useState<NeighborhoodItem | null>(null);
+  const [neighborhoodFormName, setNeighborhoodFormName] = useState('');
+  const [neighborhoodFormCityName, setNeighborhoodFormCityName] = useState('');
+  const [neighborhoodFormStateUf, setNeighborhoodFormStateUf] = useState('SP');
+  const [neighborhoodFormMarketAreaName, setNeighborhoodFormMarketAreaName] = useState('');
+  const [neighborhoodFormDefaultRouteId, setNeighborhoodFormDefaultRouteId] = useState('');
+  const [neighborhoodFormZipCode, setNeighborhoodFormZipCode] = useState('');
+  const [neighborhoodFormActive, setNeighborhoodFormActive] = useState(true);
+
+  // Cidades
+  const [citySearchTerm, setCitySearchTerm] = useState('');
+  const [cityStateFilter, setCityStateFilter] = useState('todos');
+  const [isCityModalOpen, setIsCityModalOpen] = useState(false);
+  const [editingCity, setEditingCity] = useState<CityItem | null>(null);
+  const [cityFormName, setCityFormName] = useState('');
+  const [cityFormStateUf, setCityFormStateUf] = useState('SP');
+  const [cityFormMarketAreaName, setCityFormMarketAreaName] = useState('');
+  const [cityFormDefaultRouteId, setCityFormDefaultRouteId] = useState('');
+  const [cityFormIbgeCode, setCityFormIbgeCode] = useState('');
+  const [cityFormActive, setCityFormActive] = useState(true);
+
+  // Estados
+  const [stateSearchTerm, setStateSearchTerm] = useState('');
+  const [stateRegionFilter, setStateRegionFilter] = useState('todos');
+  const [isStateModalOpen, setIsStateModalOpen] = useState(false);
+  const [editingState, setEditingState] = useState<StateItem | null>(null);
+  const [stateFormUf, setStateFormUf] = useState('');
+  const [stateFormName, setStateFormName] = useState('');
+  const [stateFormRegion, setStateFormRegion] = useState<'Sudeste' | 'Sul' | 'Centro-Oeste' | 'Nordeste' | 'Norte'>('Sudeste');
+  const [stateFormActive, setStateFormActive] = useState(true);
+
+  // Listas de Localidades derivadas do banco
+  const marketAreas = useMemo(() => dbState.marketAreas || [], [dbState.marketAreas]);
+  const cities = useMemo(() => dbState.cities || [], [dbState.cities]);
+  const neighborhoods = useMemo(() => dbState.neighborhoods || [], [dbState.neighborhoods]);
+  const states = useMemo(() => dbState.states || [], [dbState.states]);
+
+  // Listas filtradas para as tabelas de localidades
+  const filteredMarketAreas = useMemo(() => {
+    return marketAreas.filter((m) => {
+      if (!marketAreaSearchTerm.trim()) return true;
+      const term = marketAreaSearchTerm.toLowerCase();
+      return (
+        m.name.toLowerCase().includes(term) ||
+        (m.description || '').toLowerCase().includes(term) ||
+        (m.defaultRouteName || '').toLowerCase().includes(term) ||
+        (m.cities || []).some((c) => c.toLowerCase().includes(term))
+      );
+    });
+  }, [marketAreas, marketAreaSearchTerm]);
+
+  const filteredNeighborhoods = useMemo(() => {
+    return neighborhoods.filter((n) => {
+      if (neighborhoodStateFilter !== 'todos' && n.stateUf !== neighborhoodStateFilter) return false;
+      if (neighborhoodCityFilter !== 'todos' && n.cityName.toLowerCase() !== neighborhoodCityFilter.toLowerCase()) return false;
+      if (!neighborhoodSearchTerm.trim()) return true;
+      const term = neighborhoodSearchTerm.toLowerCase();
+      return (
+        n.name.toLowerCase().includes(term) ||
+        n.cityName.toLowerCase().includes(term) ||
+        (n.marketAreaName || '').toLowerCase().includes(term) ||
+        (n.defaultRouteName || '').toLowerCase().includes(term) ||
+        (n.zipCodePrefix || '').includes(term)
+      );
+    });
+  }, [neighborhoods, neighborhoodSearchTerm, neighborhoodCityFilter, neighborhoodStateFilter]);
+
+  const filteredCities = useMemo(() => {
+    return cities.filter((c) => {
+      if (cityStateFilter !== 'todos' && c.stateUf !== cityStateFilter) return false;
+      if (!citySearchTerm.trim()) return true;
+      const term = citySearchTerm.toLowerCase();
+      return (
+        c.name.toLowerCase().includes(term) ||
+        c.stateUf.toLowerCase().includes(term) ||
+        (c.marketAreaName || '').toLowerCase().includes(term) ||
+        (c.defaultRouteName || '').toLowerCase().includes(term) ||
+        (c.ibgeCode || '').includes(term)
+      );
+    });
+  }, [cities, citySearchTerm, cityStateFilter]);
+
+  const filteredStates = useMemo(() => {
+    return states.filter((st) => {
+      if (stateRegionFilter !== 'todos' && st.region !== stateRegionFilter) return false;
+      if (!stateSearchTerm.trim()) return true;
+      const term = stateSearchTerm.toLowerCase();
+      return st.uf.toLowerCase().includes(term) || st.name.toLowerCase().includes(term);
+    });
+  }, [states, stateSearchTerm, stateRegionFilter]);
 
   // ==========================================
   // ESTADOS - ABA RELATÓRIOS DE EXPEDIÇÃO
@@ -645,6 +773,221 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
     setDbState({ ...Database.getState() });
     setBatchSelectedCustomerIds([]);
     toast.success(`${count} cliente(s) vinculado(s) à rota "${targetRoute.name}" com sucesso!`);
+  };
+
+  // ==========================================
+  // HANDLERS - GESTÃO DE PRAÇAS COMERCIAIS
+  // ==========================================
+  const handleOpenNewMarketAreaModal = () => {
+    setEditingMarketArea(null);
+    setMarketAreaFormName('');
+    setMarketAreaFormDescription('');
+    setMarketAreaFormDefaultRouteId('');
+    setMarketAreaFormCities('');
+    setMarketAreaFormActive(true);
+    setIsMarketAreaModalOpen(true);
+  };
+
+  const handleEditMarketArea = (m: MarketAreaItem) => {
+    setEditingMarketArea(m);
+    setMarketAreaFormName(m.name);
+    setMarketAreaFormDescription(m.description || '');
+    setMarketAreaFormDefaultRouteId(m.defaultRouteId || '');
+    setMarketAreaFormCities(m.cities?.join(', ') || '');
+    setMarketAreaFormActive(m.active);
+    setIsMarketAreaModalOpen(true);
+  };
+
+  const handleSaveMarketArea = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!marketAreaFormName.trim()) {
+      toast.error('Informe o nome da praça comercial.');
+      return;
+    }
+    const routeObj = routes.find((r) => r.id === marketAreaFormDefaultRouteId);
+    const citiesArray = marketAreaFormCities
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    Database.saveMarketArea({
+      id: editingMarketArea?.id,
+      name: marketAreaFormName.trim(),
+      description: marketAreaFormDescription.trim(),
+      defaultRouteId: marketAreaFormDefaultRouteId,
+      defaultRouteName: routeObj ? routeObj.name : '',
+      cities: citiesArray,
+      active: marketAreaFormActive,
+    });
+    setDbState({ ...Database.getState() });
+    toast.success(`Praça "${marketAreaFormName}" salva com sucesso!`);
+    setIsMarketAreaModalOpen(false);
+  };
+
+  const handleDeleteMarketArea = (id: string, name: string) => {
+    if (confirm(`Deseja realmente excluir a praça "${name}"?`)) {
+      Database.deleteMarketArea(id);
+      setDbState({ ...Database.getState() });
+      toast.info(`Praça "${name}" excluída.`);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS - GESTÃO DE BAIRROS
+  // ==========================================
+  const handleOpenNewNeighborhoodModal = () => {
+    setEditingNeighborhood(null);
+    setNeighborhoodFormName('');
+    setNeighborhoodFormCityName(cities[0]?.name || 'São Paulo');
+    setNeighborhoodFormStateUf(cities[0]?.stateUf || 'SP');
+    setNeighborhoodFormMarketAreaName('');
+    setNeighborhoodFormDefaultRouteId('');
+    setNeighborhoodFormZipCode('');
+    setNeighborhoodFormActive(true);
+    setIsNeighborhoodModalOpen(true);
+  };
+
+  const handleEditNeighborhood = (n: NeighborhoodItem) => {
+    setEditingNeighborhood(n);
+    setNeighborhoodFormName(n.name);
+    setNeighborhoodFormCityName(n.cityName);
+    setNeighborhoodFormStateUf(n.stateUf);
+    setNeighborhoodFormMarketAreaName(n.marketAreaName || '');
+    setNeighborhoodFormDefaultRouteId(n.defaultRouteId || '');
+    setNeighborhoodFormZipCode(n.zipCodePrefix || '');
+    setNeighborhoodFormActive(n.active);
+    setIsNeighborhoodModalOpen(true);
+  };
+
+  const handleSaveNeighborhood = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!neighborhoodFormName.trim()) {
+      toast.error('Informe o nome do bairro.');
+      return;
+    }
+    const routeObj = routes.find((r) => r.id === neighborhoodFormDefaultRouteId);
+    const mktObj = marketAreas.find((m) => m.name === neighborhoodFormMarketAreaName);
+
+    Database.saveNeighborhood({
+      id: editingNeighborhood?.id,
+      name: neighborhoodFormName.trim(),
+      cityName: neighborhoodFormCityName.trim(),
+      stateUf: neighborhoodFormStateUf.trim().toUpperCase(),
+      marketAreaId: mktObj?.id,
+      marketAreaName: neighborhoodFormMarketAreaName.trim(),
+      defaultRouteId: neighborhoodFormDefaultRouteId,
+      defaultRouteName: routeObj ? routeObj.name : '',
+      zipCodePrefix: neighborhoodFormZipCode.trim(),
+      active: neighborhoodFormActive,
+    });
+    setDbState({ ...Database.getState() });
+    toast.success(`Bairro "${neighborhoodFormName}" salvo com sucesso!`);
+    setIsNeighborhoodModalOpen(false);
+  };
+
+  const handleDeleteNeighborhood = (id: string, name: string) => {
+    if (confirm(`Deseja realmente excluir o bairro "${name}"?`)) {
+      Database.deleteNeighborhood(id);
+      setDbState({ ...Database.getState() });
+      toast.info(`Bairro "${name}" excluído.`);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS - GESTÃO DE CIDADES
+  // ==========================================
+  const handleOpenNewCityModal = () => {
+    setEditingCity(null);
+    setCityFormName('');
+    setCityFormStateUf('SP');
+    setCityFormMarketAreaName('');
+    setCityFormDefaultRouteId('');
+    setCityFormIbgeCode('');
+    setCityFormActive(true);
+    setIsCityModalOpen(true);
+  };
+
+  const handleEditCity = (c: CityItem) => {
+    setEditingCity(c);
+    setCityFormName(c.name);
+    setCityFormStateUf(c.stateUf);
+    setCityFormMarketAreaName(c.marketAreaName || '');
+    setCityFormDefaultRouteId(c.defaultRouteId || '');
+    setCityFormIbgeCode(c.ibgeCode || '');
+    setCityFormActive(c.active);
+    setIsCityModalOpen(true);
+  };
+
+  const handleSaveCity = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cityFormName.trim()) {
+      toast.error('Informe o nome da cidade.');
+      return;
+    }
+    const routeObj = routes.find((r) => r.id === cityFormDefaultRouteId);
+    const mktObj = marketAreas.find((m) => m.name === cityFormMarketAreaName);
+
+    Database.saveCity({
+      id: editingCity?.id,
+      name: cityFormName.trim(),
+      stateUf: cityFormStateUf.trim().toUpperCase(),
+      marketAreaId: mktObj?.id,
+      marketAreaName: cityFormMarketAreaName.trim(),
+      defaultRouteId: cityFormDefaultRouteId,
+      defaultRouteName: routeObj ? routeObj.name : '',
+      ibgeCode: cityFormIbgeCode.trim(),
+      active: cityFormActive,
+    });
+    setDbState({ ...Database.getState() });
+    toast.success(`Cidade "${cityFormName}/${cityFormStateUf}" salva com sucesso!`);
+    setIsCityModalOpen(false);
+  };
+
+  const handleDeleteCity = (id: string, name: string) => {
+    if (confirm(`Deseja realmente excluir a cidade "${name}"?`)) {
+      Database.deleteCity(id);
+      setDbState({ ...Database.getState() });
+      toast.info(`Cidade "${name}" excluída.`);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS - GESTÃO DE ESTADOS (UF)
+  // ==========================================
+  const handleOpenNewStateModal = () => {
+    setEditingState(null);
+    setStateFormUf('');
+    setStateFormName('');
+    setStateFormRegion('Sudeste');
+    setStateFormActive(true);
+    setIsStateModalOpen(true);
+  };
+
+  const handleEditState = (st: StateItem) => {
+    setEditingState(st);
+    setStateFormUf(st.uf);
+    setStateFormName(st.name);
+    setStateFormRegion(st.region);
+    setStateFormActive(st.active);
+    setIsStateModalOpen(true);
+  };
+
+  const handleSaveState = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stateFormUf.trim() || !stateFormName.trim()) {
+      toast.error('Informe a sigla (UF) e o nome do estado.');
+      return;
+    }
+    Database.saveStateItem({
+      id: editingState?.id,
+      uf: stateFormUf.trim().toUpperCase(),
+      name: stateFormName.trim(),
+      region: stateFormRegion,
+      active: stateFormActive,
+    });
+    setDbState({ ...Database.getState() });
+    toast.success(`Estado "${stateFormUf.toUpperCase()}" salvo com sucesso!`);
+    setIsStateModalOpen(false);
   };
 
   // Lista de clientes filtrados na aba de rotas
@@ -1274,8 +1617,169 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
       {/* ========================================================================= */}
       {activeTab === 'rotas' && (
         <div className="space-y-4">
-          {/* BANNER DE ASSOCIAÇÃO EM LOTE (RECURSO CHAVE SOLICITADO) */}
-          <div className="bg-gradient-to-br from-blue-900 via-slate-900 to-indigo-950 text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-blue-800/60 space-y-4">
+          {/* BARRA DE NAVEGAÇÃO DE SUBMENUS: ROTAS E LOCALIDADES */}
+          <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setRouteSubTab('rotas')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  routeSubTab === 'rotas'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Truck size={14} />
+                <span>Rotas de Entrega</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    routeSubTab === 'rotas' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {routes.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRouteSubTab('pracas')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  routeSubTab === 'pracas'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Landmark size={14} />
+                <span>Praças Comerciais</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    routeSubTab === 'pracas' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {marketAreas.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRouteSubTab('bairros')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  routeSubTab === 'bairros'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Building size={14} />
+                <span>Bairros</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    routeSubTab === 'bairros' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {neighborhoods.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRouteSubTab('cidades')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  routeSubTab === 'cidades'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <MapPin size={14} />
+                <span>Cidades</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    routeSubTab === 'cidades' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {cities.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRouteSubTab('estados')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  routeSubTab === 'estados'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Globe size={14} />
+                <span>Estados (UF)</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    routeSubTab === 'estados' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {states.length}
+                </span>
+              </button>
+            </div>
+
+            {/* BOTÕES DE NOVO CADASTRO DE ACORDO COM A ABA ATIVA */}
+            <div className="flex items-center gap-2">
+              {routeSubTab === 'rotas' && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewRouteModal}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>NOVA ROTA</span>
+                </button>
+              )}
+              {routeSubTab === 'pracas' && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewMarketAreaModal}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>NOVA PRAÇA</span>
+                </button>
+              )}
+              {routeSubTab === 'bairros' && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewNeighborhoodModal}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>NOVO BAIRRO</span>
+                </button>
+              )}
+              {routeSubTab === 'cidades' && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewCityModal}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>NOVA CIDADE</span>
+                </button>
+              )}
+              {routeSubTab === 'estados' && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewStateModal}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>NOVO ESTADO</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {routeSubTab === 'rotas' && (
+            <div className="space-y-4">
+              {/* BANNER DE ASSOCIAÇÃO EM LOTE (RECURSO CHAVE SOLICITADO) */}
+              <div className="bg-gradient-to-br from-blue-900 via-slate-900 to-indigo-950 text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-blue-800/60 space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
               <div className="flex items-start gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center justify-center shrink-0">
@@ -1691,6 +2195,675 @@ export const ExpeditionView: React.FC<ExpeditionViewProps> = ({ initialTab = 'ro
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+          {/* ========================================================================= */}
+          {/* SUB-ABA: PRAÇAS COMERCIAIS */}
+          {/* ========================================================================= */}
+          {routeSubTab === 'pracas' && (
+            <div className="space-y-4">
+              {/* CABEÇALHO E FILTROS DE PRAÇAS */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-800 flex items-center gap-2">
+                      <Landmark className="text-blue-600" size={18} />
+                      <span>Praças Comerciais & Regiões de Atendimento</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Cadastre e organize praças comerciais que podem ser selecionadas no cadastro de clientes e vinculadas a rotas de entrega.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-full sm:w-64">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar praça ou cidade..."
+                        value={marketAreaSearchTerm}
+                        onChange={(e) => setMarketAreaSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARDS RESUMO DE PRAÇAS */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 text-xs">
+                  <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-blue-700 block">Total de Praças Cadastradas</span>
+                    <span className="text-lg font-black text-blue-900">{marketAreas.length}</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-emerald-700 block">Praças Ativas</span>
+                    <span className="text-lg font-black text-emerald-900">{marketAreas.filter((m) => m.active).length}</span>
+                  </div>
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-indigo-700 block">Com Rota Padrão Vinculada</span>
+                    <span className="text-lg font-black text-indigo-900">{marketAreas.filter((m) => m.defaultRouteId).length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABELA DE PRAÇAS */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50/90 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="p-3.5">Nome da Praça Comercial</th>
+                        <th className="p-3.5">Descrição</th>
+                        <th className="p-3.5">Rota Padrão Vinculada</th>
+                        <th className="p-3.5">Cidades Atendidas</th>
+                        <th className="p-3.5 text-center">Clientes</th>
+                        <th className="p-3.5 text-center">Status</th>
+                        <th className="p-3.5 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredMarketAreas.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-400">
+                            Nenhuma praça comercial encontrada para a busca informada.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMarketAreas.map((m) => {
+                          const clientCount = customers.filter(
+                            (c) => (c.marketArea || '').toLowerCase() === m.name.toLowerCase()
+                          ).length;
+                          return (
+                            <tr key={m.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="p-3.5 font-extrabold text-slate-800">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                    <Landmark size={14} />
+                                  </div>
+                                  <span>{m.name}</span>
+                                </div>
+                              </td>
+                              <td className="p-3.5 text-slate-600 max-w-xs">
+                                {m.description || <span className="text-slate-400 italic">—</span>}
+                              </td>
+                              <td className="p-3.5">
+                                {m.defaultRouteName ? (
+                                  <span className="inline-flex items-center gap-1.5 font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 text-[11px]">
+                                    <Truck size={12} />
+                                    <span>{m.defaultRouteName}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-[11px] italic">Nenhuma rota associada</span>
+                                )}
+                              </td>
+                              <td className="p-3.5">
+                                {m.cities && m.cities.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {m.cities.map((city, cIdx) => (
+                                      <span
+                                        key={cIdx}
+                                        className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-semibold border border-slate-200"
+                                      >
+                                        {city}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">—</span>
+                                )}
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full text-xs">
+                                  {clientCount}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                    m.active
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                  }`}
+                                >
+                                  {m.active ? 'Ativa' : 'Inativa'}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditMarketArea(m)}
+                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
+                                    title="Editar praça"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteMarketArea(m.id, m.name)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                                    title="Excluir praça"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SUB-ABA: BAIRROS */}
+          {/* ========================================================================= */}
+          {routeSubTab === 'bairros' && (
+            <div className="space-y-4">
+              {/* CABEÇALHO E FILTROS DE BAIRROS */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-800 flex items-center gap-2">
+                      <Building className="text-blue-600" size={18} />
+                      <span>Cadastro de Bairros</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Gerencie bairros com vinculação automática de Cidade, Praça Comercial e Rota de Entrega para agilizar o cadastro de clientes.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative w-full sm:w-48">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar bairro..."
+                        value={neighborhoodSearchTerm}
+                        onChange={(e) => setNeighborhoodSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-blue-500"
+                      />
+                    </div>
+
+                    <select
+                      value={neighborhoodStateFilter}
+                      onChange={(e) => setNeighborhoodStateFilter(e.target.value)}
+                      className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
+                    >
+                      <option value="todos">Todos Estados</option>
+                      {states.map((st) => (
+                        <option key={st.id} value={st.uf}>
+                          {st.uf}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={neighborhoodCityFilter}
+                      onChange={(e) => setNeighborhoodCityFilter(e.target.value)}
+                      className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
+                    >
+                      <option value="todos">Todas Cidades</option>
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name} ({c.stateUf})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* CARDS RESUMO DE BAIRROS */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 text-xs">
+                  <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-blue-700 block">Total de Bairros</span>
+                    <span className="text-lg font-black text-blue-900">{neighborhoods.length}</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-emerald-700 block">Com Rota de Entrega</span>
+                    <span className="text-lg font-black text-emerald-900">
+                      {neighborhoods.filter((n) => n.defaultRouteId).length}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-purple-700 block">Com Praça Comercial</span>
+                    <span className="text-lg font-black text-purple-900">
+                      {neighborhoods.filter((n) => n.marketAreaName).length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABELA DE BAIRROS */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50/90 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="p-3.5">Nome do Bairro</th>
+                        <th className="p-3.5">Cidade / UF</th>
+                        <th className="p-3.5">Praça Comercial</th>
+                        <th className="p-3.5">Rota Padrão</th>
+                        <th className="p-3.5 text-center">Prefixo CEP</th>
+                        <th className="p-3.5 text-center">Clientes</th>
+                        <th className="p-3.5 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredNeighborhoods.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-400">
+                            Nenhum bairro encontrado com os filtros aplicados.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredNeighborhoods.map((n) => {
+                          const clientCount = customers.filter(
+                            (c) =>
+                              (c.neighborhood || '').toLowerCase() === n.name.toLowerCase() &&
+                              (!c.city || c.city.toLowerCase() === n.cityName.toLowerCase())
+                          ).length;
+                          return (
+                            <tr key={n.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="p-3.5 font-extrabold text-slate-800">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
+                                    <Building size={14} />
+                                  </div>
+                                  <span>{n.name}</span>
+                                </div>
+                              </td>
+                              <td className="p-3.5 text-slate-700">
+                                <span className="font-semibold">{n.cityName}</span>
+                                <span className="text-slate-400 ml-1">/ {n.stateUf}</span>
+                              </td>
+                              <td className="p-3.5">
+                                {n.marketAreaName ? (
+                                  <span className="inline-flex items-center gap-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">
+                                    <Landmark size={11} className="text-blue-600" />
+                                    <span>{n.marketAreaName}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">—</span>
+                                )}
+                              </td>
+                              <td className="p-3.5">
+                                {n.defaultRouteName ? (
+                                  <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 text-[11px]">
+                                    <Truck size={11} />
+                                    <span>{n.defaultRouteName}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">—</span>
+                                )}
+                              </td>
+                              <td className="p-3.5 text-center font-mono text-[11px] text-slate-600">
+                                {n.zipCodePrefix || '—'}
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full text-xs">
+                                  {clientCount}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditNeighborhood(n)}
+                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
+                                    title="Editar bairro"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteNeighborhood(n.id, n.name)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                                    title="Excluir bairro"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SUB-ABA: CIDADES */}
+          {/* ========================================================================= */}
+          {routeSubTab === 'cidades' && (
+            <div className="space-y-4">
+              {/* CABEÇALHO E FILTROS DE CIDADES */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-800 flex items-center gap-2">
+                      <MapPin className="text-blue-600" size={18} />
+                      <span>Cadastro de Cidades</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Cidades atendidas pelas operações de vendas e entregas, vinculadas a Estados (UF), Praças Comerciais e Rotas de Entrega.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative w-full sm:w-56">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar cidade..."
+                        value={citySearchTerm}
+                        onChange={(e) => setCitySearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-blue-500"
+                      />
+                    </div>
+
+                    <select
+                      value={cityStateFilter}
+                      onChange={(e) => setCityStateFilter(e.target.value)}
+                      className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
+                    >
+                      <option value="todos">Todos Estados</option>
+                      {states.map((st) => (
+                        <option key={st.id} value={st.uf}>
+                          {st.uf} - {st.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* CARDS RESUMO DE CIDADES */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 text-xs">
+                  <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-blue-700 block">Total de Cidades</span>
+                    <span className="text-lg font-black text-blue-900">{cities.length}</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-emerald-700 block">Com Rota Padrão</span>
+                    <span className="text-lg font-black text-emerald-900">
+                      {cities.filter((c) => c.defaultRouteId).length}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-amber-50/70 border border-amber-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-amber-700 block">Com Praça Comercial</span>
+                    <span className="text-lg font-black text-amber-900">
+                      {cities.filter((c) => c.marketAreaName).length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABELA DE CIDADES */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50/90 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="p-3.5">Nome da Cidade</th>
+                        <th className="p-3.5">UF</th>
+                        <th className="p-3.5">Praça Comercial Padrão</th>
+                        <th className="p-3.5">Rota de Entrega Padrão</th>
+                        <th className="p-3.5 text-center">Bairros Cadastrados</th>
+                        <th className="p-3.5 text-center">Cód. IBGE</th>
+                        <th className="p-3.5 text-center">Clientes</th>
+                        <th className="p-3.5 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredCities.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="p-8 text-center text-slate-400">
+                            Nenhuma cidade encontrada com os filtros aplicados.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredCities.map((c) => {
+                          const neighCount = neighborhoods.filter(
+                            (n) => n.cityName.toLowerCase() === c.name.toLowerCase()
+                          ).length;
+                          const clientCount = customers.filter(
+                            (cust) => (cust.city || '').toLowerCase() === c.name.toLowerCase()
+                          ).length;
+                          return (
+                            <tr key={c.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="p-3.5 font-extrabold text-slate-800">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs shrink-0">
+                                    <MapPin size={14} />
+                                  </div>
+                                  <span>{c.name}</span>
+                                </div>
+                              </td>
+                              <td className="p-3.5">
+                                <span className="font-black bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md text-[11px] border border-slate-200">
+                                  {c.stateUf}
+                                </span>
+                              </td>
+                              <td className="p-3.5">
+                                {c.marketAreaName ? (
+                                  <span className="inline-flex items-center gap-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">
+                                    <Landmark size={11} className="text-blue-600" />
+                                    <span>{c.marketAreaName}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">—</span>
+                                )}
+                              </td>
+                              <td className="p-3.5">
+                                {c.defaultRouteName ? (
+                                  <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 text-[11px]">
+                                    <Truck size={11} />
+                                    <span>{c.defaultRouteName}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">—</span>
+                                )}
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
+                                  {neighCount} bairro(s)
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-center font-mono text-[11px] text-slate-500">
+                                {c.ibgeCode || '—'}
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full text-xs">
+                                  {clientCount}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditCity(c)}
+                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
+                                    title="Editar cidade"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCity(c.id, c.name)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                                    title="Excluir cidade"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SUB-ABA: ESTADOS (UF) */}
+          {/* ========================================================================= */}
+          {routeSubTab === 'estados' && (
+            <div className="space-y-4">
+              {/* CABEÇALHO E FILTROS DE ESTADOS */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-800 flex items-center gap-2">
+                      <Globe className="text-blue-600" size={18} />
+                      <span>Cadastro de Estados (UFs)</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Unidades Federativas cadastradas no sistema que são selecionadas no endereço dos clientes e vinculam cidades e regiões.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative w-full sm:w-56">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar UF ou estado..."
+                        value={stateSearchTerm}
+                        onChange={(e) => setStateSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-blue-500"
+                      />
+                    </div>
+
+                    <select
+                      value={stateRegionFilter}
+                      onChange={(e) => setStateRegionFilter(e.target.value)}
+                      className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
+                    >
+                      <option value="todos">Todas Regiões</option>
+                      <option value="Sudeste">Sudeste</option>
+                      <option value="Sul">Sul</option>
+                      <option value="Centro-Oeste">Centro-Oeste</option>
+                      <option value="Nordeste">Nordeste</option>
+                      <option value="Norte">Norte</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* CARDS RESUMO DE ESTADOS */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 text-xs">
+                  <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-blue-700 block">Total de Estados (UFs)</span>
+                    <span className="text-lg font-black text-blue-900">{states.length}</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-emerald-700 block">Estados Ativos</span>
+                    <span className="text-lg font-black text-emerald-900">
+                      {states.filter((st) => st.active).length}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-xl">
+                    <span className="text-[11px] font-bold text-purple-700 block">Regiões Cobertas</span>
+                    <span className="text-lg font-black text-purple-900">5 Macro-regiões</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABELA DE ESTADOS */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50/90 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="p-3.5">Sigla (UF)</th>
+                        <th className="p-3.5">Nome do Estado</th>
+                        <th className="p-3.5">Região</th>
+                        <th className="p-3.5 text-center">Cidades Cadastradas</th>
+                        <th className="p-3.5 text-center">Clientes</th>
+                        <th className="p-3.5 text-center">Status</th>
+                        <th className="p-3.5 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredStates.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-400">
+                            Nenhum estado encontrado com os filtros aplicados.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredStates.map((st) => {
+                          const cityCount = cities.filter((c) => c.stateUf === st.uf).length;
+                          const clientCount = customers.filter(
+                            (c) => (c.state || '').toUpperCase() === st.uf
+                          ).length;
+                          return (
+                            <tr key={st.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="p-3.5 font-black text-blue-700">
+                                <span className="bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg font-mono text-xs">
+                                  {st.uf}
+                                </span>
+                              </td>
+                              <td className="p-3.5 font-extrabold text-slate-800">
+                                {st.name}
+                              </td>
+                              <td className="p-3.5">
+                                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-semibold text-[11px]">
+                                  {st.region}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
+                                  {cityCount} cidade(s)
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full text-xs">
+                                  {clientCount}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                    st.active
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                  }`}
+                                >
+                                  {st.active ? 'Ativo' : 'Inativo'}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditState(st)}
+                                  className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
+                                  title="Editar estado"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

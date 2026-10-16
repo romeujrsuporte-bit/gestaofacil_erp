@@ -139,7 +139,11 @@ export const MENU_SECTIONS_CATALOG: MenuCatalogItem[] = [
     iconName: 'truck',
     subItems: [
       { id: 'delivery_manifests', label: 'Romaneio de Entrega', description: 'Criação e despacho de romaneios com pedidos da rota e manifesto de carga' },
-      { id: 'delivery_routes', label: 'Rotas de Entrega', description: 'Gestão de rotas e associação em lote por cidade, praça, bairro ou vendedor' },
+      { id: 'delivery_routes', label: 'Rotas de Entrega', description: 'Gestão de rotas de entrega e associação em lote' },
+      { id: 'delivery_market_areas', label: 'Praças Comerciais', description: 'Cadastro e gestão de Praças Comerciais e macrorregiões de atendimento' },
+      { id: 'delivery_neighborhoods', label: 'Bairros', description: 'Cadastro de bairros vinculados a cidades e rotas padrão' },
+      { id: 'delivery_cities', label: 'Cidades', description: 'Cadastro de municípios atendidos com vínculo a praça e rota' },
+      { id: 'delivery_states', label: 'Estados (UF)', description: 'Cadastro e manutenção de Unidades Federativas atendidas' },
       { id: 'expedition_reports', label: 'Relatórios de Entrega', description: 'Lista consolidada de produtos e conferência de entregas separada por cliente' },
     ],
   },
@@ -551,7 +555,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `OmniComercio_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `GestaoFacil_Backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

@@ -6,6 +6,8 @@
 import {
   Company,
   User,
+  UserRole,
+  UserPermissions,
   Product,
   StockLocation,
   ProductStockBalance,
@@ -1286,6 +1288,22 @@ export class Database {
             this.state.deliveryManifests = [...DEFAULT_DELIVERY_MANIFESTS];
             stateNeedsPersist = true;
           }
+          if (!this.state.states || this.state.states.length === 0) {
+            this.state.states = [...DEFAULT_STATES];
+            stateNeedsPersist = true;
+          }
+          if (!this.state.marketAreas || this.state.marketAreas.length === 0) {
+            this.state.marketAreas = [...DEFAULT_MARKET_AREAS];
+            stateNeedsPersist = true;
+          }
+          if (!this.state.cities || this.state.cities.length === 0) {
+            this.state.cities = [...DEFAULT_CITIES];
+            stateNeedsPersist = true;
+          }
+          if (!this.state.neighborhoods || this.state.neighborhoods.length === 0) {
+            this.state.neighborhoods = [...DEFAULT_NEIGHBORHOODS];
+            stateNeedsPersist = true;
+          }
           if (this.state.customers && this.state.customers.length > 0) {
             this.state.customers = this.state.customers.map((c) => {
               if (!c.deliveryRouteId || !c.marketArea || !c.sellerName) {
@@ -2436,6 +2454,216 @@ export class Database {
   }
 
   // ==========================================
+  // GESTÃO DE LOCALIDADES (PRAÇAS, BAIRROS, CIDADES, ESTADOS)
+  // ==========================================
+
+  public static getStates(): StateItem[] {
+    const s = this.getState();
+    return s.states || DEFAULT_STATES;
+  }
+
+  public static saveStateItem(stateData: Partial<StateItem> & { uf: string; name: string }): StateItem {
+    const s = this.getState();
+    if (!s.states) s.states = [...DEFAULT_STATES];
+
+    const cleanUf = stateData.uf.trim().toUpperCase();
+    const existingIdx = s.states.findIndex((st) => st.uf === cleanUf || st.id === stateData.id);
+
+    if (existingIdx >= 0) {
+      const updated: StateItem = {
+        ...s.states[existingIdx],
+        ...stateData,
+        uf: cleanUf,
+      };
+      s.states[existingIdx] = updated;
+      this.persist();
+      return updated;
+    }
+
+    const newItem: StateItem = {
+      id: stateData.id || `uf-${cleanUf.toLowerCase()}`,
+      uf: cleanUf,
+      name: stateData.name.trim(),
+      region: stateData.region || 'Sudeste',
+      active: stateData.active !== undefined ? stateData.active : true,
+      createdAt: new Date().toISOString(),
+    };
+    s.states.push(newItem);
+    this.persist();
+    return newItem;
+  }
+
+  public static getMarketAreas(): MarketAreaItem[] {
+    const s = this.getState();
+    return s.marketAreas || DEFAULT_MARKET_AREAS;
+  }
+
+  public static saveMarketArea(data: Partial<MarketAreaItem> & { name: string }): MarketAreaItem {
+    const s = this.getState();
+    if (!s.marketAreas) s.marketAreas = [...DEFAULT_MARKET_AREAS];
+    const nowIso = new Date().toISOString();
+
+    if (data.id) {
+      const idx = s.marketAreas.findIndex((m) => m.id === data.id);
+      if (idx >= 0) {
+        const updated: MarketAreaItem = {
+          ...s.marketAreas[idx],
+          ...data,
+          name: data.name.trim(),
+          updatedAt: nowIso,
+        };
+        s.marketAreas[idx] = updated;
+        this.addAuditLog('ATUALIZAR_PRACA', 'EXPEDICAO', updated.id, `Praça ${updated.name} atualizada`);
+        this.persist();
+        return updated;
+      }
+    }
+
+    const newItem: MarketAreaItem = {
+      id: data.id || `pra-${Date.now().toString(36)}`,
+      name: data.name.trim(),
+      description: data.description || '',
+      defaultRouteId: data.defaultRouteId || '',
+      defaultRouteName: data.defaultRouteName || '',
+      cities: data.cities || [],
+      active: data.active !== undefined ? data.active : true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    s.marketAreas.unshift(newItem);
+    this.addAuditLog('CRIAR_PRACA', 'EXPEDICAO', newItem.id, `Praça ${newItem.name} cadastrada`);
+    this.persist();
+    return newItem;
+  }
+
+  public static deleteMarketArea(id: string): boolean {
+    const s = this.getState();
+    if (!s.marketAreas) return false;
+    const exists = s.marketAreas.find((m) => m.id === id);
+    if (!exists) return false;
+    s.marketAreas = s.marketAreas.filter((m) => m.id !== id);
+    this.addAuditLog('EXCLUIR_PRACA', 'EXPEDICAO', id, `Praça ${exists.name} excluída`);
+    this.persist();
+    return true;
+  }
+
+  public static getCities(): CityItem[] {
+    const s = this.getState();
+    return s.cities || DEFAULT_CITIES;
+  }
+
+  public static saveCity(data: Partial<CityItem> & { name: string; stateUf: string }): CityItem {
+    const s = this.getState();
+    if (!s.cities) s.cities = [...DEFAULT_CITIES];
+    const nowIso = new Date().toISOString();
+
+    if (data.id) {
+      const idx = s.cities.findIndex((c) => c.id === data.id);
+      if (idx >= 0) {
+        const updated: CityItem = {
+          ...s.cities[idx],
+          ...data,
+          name: data.name.trim(),
+          stateUf: data.stateUf.trim().toUpperCase(),
+          updatedAt: nowIso,
+        };
+        s.cities[idx] = updated;
+        this.addAuditLog('ATUALIZAR_CIDADE', 'EXPEDICAO', updated.id, `Cidade ${updated.name}/${updated.stateUf} atualizada`);
+        this.persist();
+        return updated;
+      }
+    }
+
+    const newItem: CityItem = {
+      id: data.id || `cid-${Date.now().toString(36)}`,
+      name: data.name.trim(),
+      stateUf: data.stateUf.trim().toUpperCase(),
+      marketAreaId: data.marketAreaId || '',
+      marketAreaName: data.marketAreaName || '',
+      defaultRouteId: data.defaultRouteId || '',
+      defaultRouteName: data.defaultRouteName || '',
+      ibgeCode: data.ibgeCode || '',
+      active: data.active !== undefined ? data.active : true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    s.cities.unshift(newItem);
+    this.addAuditLog('CRIAR_CIDADE', 'EXPEDICAO', newItem.id, `Cidade ${newItem.name}/${newItem.stateUf} cadastrada`);
+    this.persist();
+    return newItem;
+  }
+
+  public static deleteCity(id: string): boolean {
+    const s = this.getState();
+    if (!s.cities) return false;
+    const exists = s.cities.find((c) => c.id === id);
+    if (!exists) return false;
+    s.cities = s.cities.filter((c) => c.id !== id);
+    this.addAuditLog('EXCLUIR_CIDADE', 'EXPEDICAO', id, `Cidade ${exists.name} excluída`);
+    this.persist();
+    return true;
+  }
+
+  public static getNeighborhoods(): NeighborhoodItem[] {
+    const s = this.getState();
+    return s.neighborhoods || DEFAULT_NEIGHBORHOODS;
+  }
+
+  public static saveNeighborhood(data: Partial<NeighborhoodItem> & { name: string; cityName: string; stateUf: string }): NeighborhoodItem {
+    const s = this.getState();
+    if (!s.neighborhoods) s.neighborhoods = [...DEFAULT_NEIGHBORHOODS];
+    const nowIso = new Date().toISOString();
+
+    if (data.id) {
+      const idx = s.neighborhoods.findIndex((n) => n.id === data.id);
+      if (idx >= 0) {
+        const updated: NeighborhoodItem = {
+          ...s.neighborhoods[idx],
+          ...data,
+          name: data.name.trim(),
+          cityName: data.cityName.trim(),
+          stateUf: data.stateUf.trim().toUpperCase(),
+          updatedAt: nowIso,
+        };
+        s.neighborhoods[idx] = updated;
+        this.addAuditLog('ATUALIZAR_BAIRRO', 'EXPEDICAO', updated.id, `Bairro ${updated.name} atualizado`);
+        this.persist();
+        return updated;
+      }
+    }
+
+    const newItem: NeighborhoodItem = {
+      id: data.id || `bai-${Date.now().toString(36)}`,
+      name: data.name.trim(),
+      cityName: data.cityName.trim(),
+      stateUf: data.stateUf.trim().toUpperCase(),
+      marketAreaId: data.marketAreaId || '',
+      marketAreaName: data.marketAreaName || '',
+      defaultRouteId: data.defaultRouteId || '',
+      defaultRouteName: data.defaultRouteName || '',
+      zipCodePrefix: data.zipCodePrefix || '',
+      active: data.active !== undefined ? data.active : true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    s.neighborhoods.unshift(newItem);
+    this.addAuditLog('CRIAR_BAIRRO', 'EXPEDICAO', newItem.id, `Bairro ${newItem.name} cadastrado`);
+    this.persist();
+    return newItem;
+  }
+
+  public static deleteNeighborhood(id: string): boolean {
+    const s = this.getState();
+    if (!s.neighborhoods) return false;
+    const exists = s.neighborhoods.find((n) => n.id === id);
+    if (!exists) return false;
+    s.neighborhoods = s.neighborhoods.filter((n) => n.id !== id);
+    this.addAuditLog('EXCLUIR_BAIRRO', 'EXPEDICAO', id, `Bairro ${exists.name} excluído`);
+    this.persist();
+    return true;
+  }
+
+  // ==========================================
   // DADOS INICIAIS REALISTAS E COMPLETOS (SEED)
   // ==========================================
   private static getSeedData(): DatabaseState {
@@ -3542,7 +3770,7 @@ export class Database {
         action: 'INICIALIZACAO_SISTEMA',
         module: 'SISTEMA',
         recordId: 'SISTEMA',
-        details: 'Implantação inicial do OmniComércio ERP & PDV com banco integrado e multi-local',
+        details: 'Implantação inicial do GestãoFácil ERP com banco integrado e multi-local',
         timestamp: new Date().toISOString(),
       },
     ];
@@ -3574,6 +3802,10 @@ export class Database {
       paymentTermsList: [...DEFAULT_PAYMENT_TERMS],
       deliveryRoutes: [...DEFAULT_DELIVERY_ROUTES],
       deliveryManifests: [...DEFAULT_DELIVERY_MANIFESTS],
+      states: [...DEFAULT_STATES],
+      marketAreas: [...DEFAULT_MARKET_AREAS],
+      cities: [...DEFAULT_CITIES],
+      neighborhoods: [...DEFAULT_NEIGHBORHOODS],
     };
   }
 }

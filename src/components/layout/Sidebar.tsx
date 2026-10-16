@@ -177,6 +177,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       subItems: [
         { id: 'delivery_manifests', label: 'Romaneio de Entrega' },
         { id: 'delivery_routes', label: 'Rotas de Entrega' },
+        { id: 'delivery_market_areas', label: 'Praças Comerciais' },
+        { id: 'delivery_neighborhoods', label: 'Bairros' },
+        { id: 'delivery_cities', label: 'Cidades' },
+        { id: 'delivery_states', label: 'Estados (UF)' },
         { id: 'expedition_reports', label: 'Relatórios de Entrega' },
       ],
     },

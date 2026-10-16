@@ -41,6 +41,10 @@ export const LeavePosWarningModal: React.FC<LeavePosWarningModalProps> = ({
         return 'Estoque';
       case 'delivery_manifests':
       case 'delivery_routes':
+      case 'delivery_market_areas':
+      case 'delivery_neighborhoods':
+      case 'delivery_cities':
+      case 'delivery_states':
       case 'expedition_reports':
       case 'expedicao':
         return 'Expedição';
