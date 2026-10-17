@@ -32,7 +32,8 @@ import {
   Wallet,
   Calendar,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Lock,
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { StockEngine } from '../../services/stockEngine';
@@ -55,6 +56,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [dbState, setDbState] = useState(Database.getState());
   const currentCompany = Database.getCurrentCompany();
   const currentUser = Database.getCurrentUser();
+  const canViewGrossProfit = Database.canCurrentUserView('grossProfit');
+  const canViewNetProfit = Database.canCurrentUserView('netProfit');
+  const canViewTotalRevenue = Database.canCurrentUserView('totalRevenue');
+  const canViewProfitMargin = Database.canCurrentUserView('profitMargin');
+  const canViewProductCosts = Database.canCurrentUserView('productCosts');
+  const canViewCashBalances = Database.canCurrentUserView('cashBalances');
   const [internalHideKpis, setInternalHideKpis] = useState(false);
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('mes_atual');
 
@@ -352,6 +359,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const openPayables = dbState.accountsPayable
     .filter((p) => p.companyId === currentCompany.id && p.status !== 'pago' && p.status !== 'cancelado')
     .reduce((s, p) => s + p.balance, 0);
+
+  const paidPayablesTotal = dbState.accountsPayable
+    .filter((p) => p.companyId === currentCompany.id && p.status === 'pago')
+    .reduce((s, p) => s + (p.paidValue || p.originalValue), 0);
+
+  const estimatedNetProfit = profitabilityStats.grossProfit - paidPayablesTotal;
 
   const activeRegister = dbState.cashRegisters.find(
     (c) => c.companyId === currentCompany.id && c.status === 'aberto'
@@ -675,33 +688,71 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <DollarSign size={17} />
               </div>
             </div>
-            <div className="text-xl sm:text-2xl font-black text-slate-900 mt-2 font-mono">
-              {formatCurrency(salesNetTotal)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
-              <span>{salesCount} vendas no período</span>
-              <span className="text-emerald-600 font-extrabold font-mono">Méd: {formatCurrency(avgTicket)}</span>
-            </div>
+            {canViewTotalRevenue ? (
+              <>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 mt-2 font-mono">
+                  {formatCurrency(salesNetTotal)}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+                  <span>{salesCount} vendas no período</span>
+                  <span className="text-emerald-600 font-extrabold font-mono">Méd: {formatCurrency(avgTicket)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mt-2.5 py-1 px-2 bg-slate-50 border border-slate-200 rounded-lg inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                  <Lock size={13} className="text-slate-400" />
+                  <span>Valor Reservado</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-2">
+                  <span>{salesCount} vendas no período</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Lucro Bruto e Margem */}
-          <div
-            className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:border-emerald-400 hover:shadow-sm transition-all group"
-          >
-            <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-              <span>Lucro Bruto Real</span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                <Percent size={17} />
+          {canViewGrossProfit ? (
+            <div
+              className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:border-emerald-400 hover:shadow-sm transition-all group"
+            >
+              <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                <span>Lucro Bruto Real</span>
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Percent size={17} />
+                </div>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-2 font-mono">
+                {formatCurrency(profitabilityStats.grossProfit)}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+                {canViewProfitMargin ? (
+                  <>
+                    <span className="font-bold text-slate-700">Margem: {profitabilityStats.grossMarginPercent.toFixed(1)}%</span>
+                    <span className="text-blue-600 font-bold">Markup: {profitabilityStats.markupPercent.toFixed(1)}%</span>
+                  </>
+                ) : (
+                  <span className="text-slate-400 italic">Margem oculta</span>
+                )}
               </div>
             </div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-2 font-mono">
-              {formatCurrency(profitabilityStats.grossProfit)}
+          ) : (
+            <div className="bg-slate-50/70 p-4 rounded-2xl border border-dashed border-slate-200 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
+                <span>Lucro Bruto Real</span>
+                <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                  <Lock size={15} />
+                </div>
+              </div>
+              <div className="my-1.5">
+                <span className="text-xs font-bold text-slate-500 bg-slate-200/60 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                  <Lock size={13} className="text-slate-400" />
+                  <span>Informação Restrita</span>
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 leading-tight">Lucro protegido pelo administrador</span>
             </div>
-            <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
-              <span className="font-bold text-slate-700">Margem: {profitabilityStats.grossMarginPercent.toFixed(1)}%</span>
-              <span className="text-blue-600 font-bold">Markup: {profitabilityStats.markupPercent.toFixed(1)}%</span>
-            </div>
-          </div>
+          )}
 
           {/* Previsões Financeiras */}
           <div
@@ -714,12 +765,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <TrendingUp size={17} />
               </div>
             </div>
-            <div className="text-xs font-semibold text-emerald-700 mt-2">
-              A Receber: <strong className="font-extrabold font-mono">{formatCurrency(openReceivables)}</strong>
-            </div>
-            <div className="text-xs font-semibold text-rose-600 mt-1">
-              A Pagar: <strong className="font-extrabold font-mono">{formatCurrency(openPayables)}</strong>
-            </div>
+            {canViewCashBalances ? (
+              <>
+                <div className="text-xs font-semibold text-emerald-700 mt-2">
+                  A Receber: <strong className="font-extrabold font-mono">{formatCurrency(openReceivables)}</strong>
+                </div>
+                <div className="text-xs font-semibold text-rose-600 mt-1">
+                  A Pagar: <strong className="font-extrabold font-mono">{formatCurrency(openPayables)}</strong>
+                </div>
+              </>
+            ) : (
+              <div className="mt-2.5 py-1 px-2 bg-slate-50 border border-slate-200 rounded-lg inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                <Lock size={13} className="text-slate-400" />
+                <span>Saldos Restritos</span>
+              </div>
+            )}
           </div>
 
           {/* Estoque Crítico */}
@@ -957,7 +1017,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ======================================================== */}
       {/* SEÇÃO 2: DASHBOARD COMPLETO COM KPIS DE LUCRATIVIDADE */}
       {/* ======================================================== */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+      {canViewGrossProfit && (
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
@@ -989,8 +1050,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Indicadores Chave de Lucratividade */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {/* Lucro Bruto Total */}
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {/* 1. Lucro Bruto Total */}
           <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200">
             <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800">Lucro Bruto Total</span>
             <div className="text-lg sm:text-2xl font-black text-emerald-700 font-mono mt-1">
@@ -1001,7 +1062,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Margem Bruta Consolidada */}
+          {/* 2. Lucro Líquido Real & DRE */}
+          {canViewNetProfit ? (
+            <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-indigo-950">Lucro Líquido (DRE)</span>
+                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 uppercase">
+                  Líquido
+                </span>
+              </div>
+              <div className={`text-lg sm:text-2xl font-black font-mono mt-1 ${estimatedNetProfit >= 0 ? 'text-indigo-700' : 'text-rose-600'}`}>
+                {formatCurrency(estimatedNetProfit)}
+              </div>
+              <div className="text-[10px] text-indigo-800/90 font-medium mt-1">
+                Lucro Bruto menos Despesas Pagas
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-dashed border-slate-200 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Lucro Líquido</span>
+                <Lock size={13} />
+              </div>
+              <div className="my-1">
+                <span className="text-[11px] font-bold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                  <Lock size={11} className="text-slate-400" />
+                  <span>Restrito</span>
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 leading-tight">Oculto pelo administrador</span>
+            </div>
+          )}
+
+          {/* 3. Margem Bruta Consolidada */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Margem Bruta</span>
@@ -1023,30 +1116,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* CMV Total */}
+          {/* 4. CMV Total */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Custo Total (CMV)</span>
             <div className="text-lg sm:text-xl font-black text-slate-800 font-mono mt-1">
-              {formatCurrency(profitabilityStats.totalCmv)}
+              {canViewProductCosts ? formatCurrency(profitabilityStats.totalCmv) : '••••'}
             </div>
             <div className="text-[10px] text-slate-500 mt-1">
-              {salesNetTotal > 0 ? ((profitabilityStats.totalCmv / salesNetTotal) * 100).toFixed(1) : 0}% da receita
+              {salesNetTotal > 0 && canViewTotalRevenue ? `${((profitabilityStats.totalCmv / salesNetTotal) * 100).toFixed(1)}% da receita` : 'Custo operacional'}
             </div>
           </div>
 
-          {/* Markup Médio */}
+          {/* 5. Markup Médio */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Markup Praticado</span>
             <div className="text-lg sm:text-xl font-black text-blue-700 font-mono mt-1">
-              {profitabilityStats.markupPercent.toFixed(1)}%
+              {canViewProfitMargin ? `${profitabilityStats.markupPercent.toFixed(1)}%` : '••••'}
             </div>
             <div className="text-[10px] text-slate-500 mt-1">
               Multiplicador s/ custo
             </div>
           </div>
 
-          {/* Lucro Médio por Pedido */}
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 col-span-2 md:col-span-1">
+          {/* 6. Lucro Médio por Pedido */}
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Lucro Médio / Pedido</span>
             <div className="text-lg sm:text-xl font-black text-emerald-700 font-mono mt-1">
               {formatCurrency(profitabilityStats.avgProfitPerOrder)}
@@ -1189,6 +1282,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
       </div>
+      )}
 
       {/* ======================================================== */}
       {/* SEÇÃO 3: RECURSOS COMPLEMENTARES & ATALHOS OPERACIONAIS */}

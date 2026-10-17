@@ -39,8 +39,18 @@ import {
   Truck,
   Database as DatabaseIcon,
   KeyRound,
+  ShieldCheck,
+  TrendingUp,
+  DollarSign,
+  Percent,
+  Unlock,
 } from 'lucide-react';
-import { Database } from '../../services/db';
+import {
+  Database,
+  DEFAULT_ROLE_MENU_SECTIONS,
+  DEFAULT_ROLE_SUB_ITEMS,
+  DEFAULT_ROLE_FINANCIAL_PERMISSIONS,
+} from '../../services/db';
 import { Company, User, UserRole, SidebarMenuConfig } from '../../types';
 import { ThermalPrinterSettings } from './ThermalPrinterSettings';
 import { SupabaseSettings } from './SupabaseSettings';
@@ -351,6 +361,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
       case 'circle-dollar-sign': return <CircleDollarSign size={size} />;
       case 'bar-chart-3': return <BarChart3 size={size} />;
       case 'file-spreadsheet': return <FileSpreadsheet size={size} />;
+      case 'truck': return <Truck size={size} />;
       case 'settings': return <Settings size={size} />;
       default: return <LayoutGrid size={size} />;
     }
@@ -379,6 +390,139 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
   const [userRole, setUserRole] = useState<UserRole>('balconista');
   const [userMaxDiscount, setUserMaxDiscount] = useState('10');
   const [prefSaveMsg, setPrefSaveMsg] = useState<string | null>(null);
+
+  // Modal de Configuração de Menus, Submenus & Indicadores da Empresa (Exclusivo para o @admin)
+  const [userConfiguringPermissions, setUserConfiguringPermissions] = useState<User | null>(null);
+  const [permModalTab, setPermModalTab] = useState<'numeros' | 'menus'>('numeros');
+  const [permMenuSearch, setPermMenuSearch] = useState('');
+  const [tempFinPerms, setTempFinPerms] = useState({
+    canViewGrossProfit: true,
+    canViewNetProfit: false,
+    canViewTotalRevenue: true,
+    canViewProfitMargin: true,
+    canViewProductCosts: true,
+    canViewCashBalances: true,
+  });
+  const [tempAllowedSections, setTempAllowedSections] = useState<string[]>([]);
+  const [tempAllowedSubItems, setTempAllowedSubItems] = useState<string[]>([]);
+
+  const handleOpenPermissionsModal = (targetUser: User) => {
+    if (!isAdmin) {
+      toast.error(
+        'Apenas o usuário "admin" tem autorização para definir menus, submenus e números da empresa.',
+        'Acesso Restrito ao Administrador'
+      );
+      return;
+    }
+    setUserConfiguringPermissions(targetUser);
+    setPermModalTab('numeros');
+    setPermMenuSearch('');
+
+    const perms = targetUser.permissions;
+    const role = targetUser.role || 'balconista';
+    const finDefaults = DEFAULT_ROLE_FINANCIAL_PERMISSIONS[role] || DEFAULT_ROLE_FINANCIAL_PERMISSIONS.balconista;
+    const menuDefaults = DEFAULT_ROLE_MENU_SECTIONS[role] || DEFAULT_ROLE_MENU_SECTIONS.balconista;
+    const subDefaults = DEFAULT_ROLE_SUB_ITEMS[role] || DEFAULT_ROLE_SUB_ITEMS.balconista;
+
+    setTempFinPerms({
+      canViewGrossProfit: perms.canViewGrossProfit !== undefined ? perms.canViewGrossProfit : finDefaults.canViewGrossProfit,
+      canViewNetProfit: perms.canViewNetProfit !== undefined ? perms.canViewNetProfit : finDefaults.canViewNetProfit,
+      canViewTotalRevenue: perms.canViewTotalRevenue !== undefined ? perms.canViewTotalRevenue : finDefaults.canViewTotalRevenue,
+      canViewProfitMargin: perms.canViewProfitMargin !== undefined ? perms.canViewProfitMargin : finDefaults.canViewProfitMargin,
+      canViewProductCosts: perms.canViewProductCosts !== undefined ? perms.canViewProductCosts : (perms.canViewCosts ?? finDefaults.canViewProductCosts),
+      canViewCashBalances: perms.canViewCashBalances !== undefined ? perms.canViewCashBalances : finDefaults.canViewCashBalances,
+    });
+
+    setTempAllowedSections(
+      perms.allowedMenuSections ? [...perms.allowedMenuSections] : (targetUser.login === 'admin' ? MENU_SECTIONS_CATALOG.map((s) => s.id) : [...menuDefaults])
+    );
+    setTempAllowedSubItems(
+      perms.allowedSubItems ? [...perms.allowedSubItems] : (targetUser.login === 'admin' ? MENU_SECTIONS_CATALOG.flatMap((s) => s.subItems?.map((sub) => sub.id) || []) : [...subDefaults])
+    );
+  };
+
+  const handleSavePermissionsConfig = () => {
+    if (!isAdmin || !userConfiguringPermissions) {
+      toast.error('Apenas o usuário "admin" pode salvar permissões.');
+      return;
+    }
+
+    const res = Database.updateUserPermissions(
+      userConfiguringPermissions.id,
+      {
+        ...tempFinPerms,
+        canViewCosts: tempFinPerms.canViewProductCosts,
+        allowedMenuSections: tempAllowedSections,
+        allowedSubItems: tempAllowedSubItems,
+      },
+      currentUser.id
+    );
+
+    if (res.success) {
+      toast.success(
+        `Permissões de menus e números da empresa salvas para ${userConfiguringPermissions.name}!`,
+        'Permissões Atualizadas'
+      );
+      setUserConfiguringPermissions(null);
+    } else {
+      toast.error(res.error || 'Erro ao salvar permissões.');
+    }
+  };
+
+  const handleSelectAllMenus = () => {
+    setTempAllowedSections(MENU_SECTIONS_CATALOG.map((s) => s.id));
+    setTempAllowedSubItems(MENU_SECTIONS_CATALOG.flatMap((s) => s.subItems?.map((sub) => sub.id) || []));
+  };
+
+  const handleDeselectAllMenus = () => {
+    setTempAllowedSections(['inicio']);
+    setTempAllowedSubItems(['dashboard']);
+  };
+
+  const handleResetToRoleDefaults = () => {
+    if (!userConfiguringPermissions) return;
+    const role = userConfiguringPermissions.role || 'balconista';
+    const finDef = DEFAULT_ROLE_FINANCIAL_PERMISSIONS[role] || DEFAULT_ROLE_FINANCIAL_PERMISSIONS.balconista;
+    const menuDef = DEFAULT_ROLE_MENU_SECTIONS[role] || DEFAULT_ROLE_MENU_SECTIONS.balconista;
+    const subDef = DEFAULT_ROLE_SUB_ITEMS[role] || DEFAULT_ROLE_SUB_ITEMS.balconista;
+
+    setTempFinPerms({ ...finDef });
+    setTempAllowedSections([...menuDef]);
+    setTempAllowedSubItems([...subDef]);
+    toast.info(`Configurações redefinidas para o padrão do perfil "${role}".`);
+  };
+
+  const handleTogglePermSection = (sectionId: string) => {
+    const isCurrentlyAllowed = tempAllowedSections.includes(sectionId);
+    const section = MENU_SECTIONS_CATALOG.find((s) => s.id === sectionId);
+    const sectionSubIds = section?.subItems?.map((s) => s.id) || [];
+
+    if (isCurrentlyAllowed) {
+      setTempAllowedSections((prev) => prev.filter((id) => id !== sectionId));
+      setTempAllowedSubItems((prev) => prev.filter((id) => !sectionSubIds.includes(id)));
+    } else {
+      setTempAllowedSections((prev) => [...prev, sectionId]);
+      setTempAllowedSubItems((prev) => Array.from(new Set([...prev, ...sectionSubIds])));
+    }
+  };
+
+  const handleTogglePermSubItem = (sectionId: string, subItemId: string) => {
+    const isCurrentlyAllowed = tempAllowedSubItems.includes(subItemId);
+    if (isCurrentlyAllowed) {
+      const nextSubs = tempAllowedSubItems.filter((id) => id !== subItemId);
+      setTempAllowedSubItems(nextSubs);
+      const section = MENU_SECTIONS_CATALOG.find((s) => s.id === sectionId);
+      const remainingSubs = section?.subItems?.filter((s) => nextSubs.includes(s.id)) || [];
+      if (remainingSubs.length === 0) {
+        setTempAllowedSections((prev) => prev.filter((id) => id !== sectionId));
+      }
+    } else {
+      setTempAllowedSubItems((prev) => [...prev, subItemId]);
+      if (!tempAllowedSections.includes(sectionId)) {
+        setTempAllowedSections((prev) => [...prev, sectionId]);
+      }
+    }
+  };
 
   // Salvar Empresa
   const handleSaveCompany = (e: React.FormEvent) => {
@@ -816,14 +960,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
                       </span>
                     )}
                   </div>
+
+                  <div className="text-slate-500 text-[11px] mt-1.5 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                      <LayoutGrid size={12} className="text-blue-600" />
+                      <span>
+                        {u.login === 'admin'
+                          ? 'Menus: Todos (Acesso Total)'
+                          : `${u.permissions.allowedMenuSections ? u.permissions.allowedMenuSections.length : 'Padrão'} Menus • ${u.permissions.allowedSubItems ? u.permissions.allowedSubItems.length : 'Padrão'} Submenus`}
+                      </span>
+                    </span>
+                    <span className={`inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md border ${
+                      u.login === 'admin' || u.permissions.canViewGrossProfit || u.permissions.canViewNetProfit
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                    }`}>
+                      <TrendingUp size={12} className={u.login === 'admin' || u.permissions.canViewGrossProfit || u.permissions.canViewNetProfit ? 'text-emerald-600' : 'text-slate-400'} />
+                      <span>
+                        {u.login === 'admin'
+                          ? 'Números da Empresa: Acesso Total'
+                          : u.permissions.canViewGrossProfit && u.permissions.canViewNetProfit
+                          ? 'Lucro Bruto & Líquido'
+                          : u.permissions.canViewGrossProfit
+                          ? 'Lucro Bruto (Líquido Oculto)'
+                          : u.permissions.canViewNetProfit
+                          ? 'Lucro Líquido (Bruto Oculto)'
+                          : 'Lucros & Números da Empresa: Ocultos'}
+                      </span>
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     u.status === 'ativo' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
                   }`}>
                     {u.status}
                   </span>
+
+                  {/* Botão Configuração de Menus, Submenus & Números da Empresa (Exclusivo do @admin) */}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPermissionsModal(u)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors cursor-pointer shadow-2xs"
+                      title={
+                        u.login === 'admin'
+                          ? 'Visualizar configuração de menus e números da empresa do Administrador Master'
+                          : `Definir quais menus, submenus e números da empresa ${u.name} pode visualizar e utilizar`
+                      }
+                    >
+                      <ShieldCheck size={13} className="text-indigo-600" />
+                      <span>Menus & Números</span>
+                    </button>
+                  )}
 
                   {/* Botão Alterar Senha */}
                   <button
@@ -1754,7 +1944,655 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
         </div>
       )}
 
-      {/* Modal de Alteração de Senha acionado na lista de usuários */}
+      {/* Modal de Configuração de Menus, Submenus & Números da Empresa (Exclusivo para o @admin) */}
+      {userConfiguringPermissions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in fade-in-50 duration-150">
+            {/* Cabeçalho do Modal */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                    <span>Permissões de Menus, Submenus & Números da Empresa</span>
+                  </h3>
+                  <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-slate-800">{userConfiguringPermissions.name}</span>
+                    <span>•</span>
+                    <span>Login: <strong className="font-mono text-indigo-700 font-bold">@{userConfiguringPermissions.login}</strong></span>
+                    <span>•</span>
+                    <span className="uppercase text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                      Perfil: {userConfiguringPermissions.role}
+                    </span>
+                    {userConfiguringPermissions.login === 'admin' ? (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                        Admin Master (Acesso Total)
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setUserConfiguringPermissions(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                title="Fechar sem salvar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Aviso Informativo de Segurança */}
+            <div className="px-5 py-2.5 bg-indigo-50/80 border-b border-indigo-100 text-xs text-indigo-900 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Lock size={14} className="text-indigo-600 shrink-0" />
+                <span className="leading-snug">
+                  <strong>Apenas o usuário "admin"</strong> pode definir quais menus e submenus cada usuário pode utilizar e se poderá visualizar dados estratégicos da empresa (como <strong>Lucro Bruto</strong> ou <strong>Lucro Líquido</strong>).
+                </span>
+              </div>
+            </div>
+
+            {/* Navegação entre Abas do Modal */}
+            <div className="flex items-center gap-2 px-5 pt-3 pb-2 border-b border-slate-100 bg-white">
+              <button
+                type="button"
+                onClick={() => setPermModalTab('numeros')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  permModalTab === 'numeros'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <DollarSign size={15} />
+                <span>Números da Empresa & Lucratividade</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  permModalTab === 'numeros' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {Object.values(tempFinPerms).filter(Boolean).length}/6 ativos
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPermModalTab('menus')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  permModalTab === 'menus'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <LayoutGrid size={15} />
+                <span>Menus & Submenus Permitidos</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  permModalTab === 'menus' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {tempAllowedSections.length} menus • {tempAllowedSubItems.length} submenus
+                </span>
+              </button>
+            </div>
+
+            {/* Conteúdo com Scroll */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {/* ======================================================== */}
+              {/* ABA 1: VISIBILIDADE DE NÚMEROS DA EMPRESA & LUCRATIVIDADE */}
+              {/* ======================================================== */}
+              {permModalTab === 'numeros' && (
+                <div className="space-y-4">
+                  {/* Presets Rápidos */}
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">Predefinições Rápidas de Segurança:</span>
+                      <span className="text-[11px] text-slate-500">Configure rapidamente o perfil de visualização financeira deste usuário:</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempFinPerms({
+                            canViewGrossProfit: false,
+                            canViewNetProfit: false,
+                            canViewTotalRevenue: false,
+                            canViewProfitMargin: false,
+                            canViewProductCosts: false,
+                            canViewCashBalances: false,
+                          });
+                          toast.info('Todos os números e lucros da empresa foram ocultados para este usuário.');
+                        }}
+                        className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                        title="Ocultar todos os números estratégicos, custos e lucros da empresa"
+                      >
+                        Ocultar Todos os Números
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempFinPerms({
+                            canViewGrossProfit: true,
+                            canViewNetProfit: false,
+                            canViewTotalRevenue: true,
+                            canViewProfitMargin: true,
+                            canViewProductCosts: true,
+                            canViewCashBalances: false,
+                          });
+                          toast.info('Permissões ajustadas para: Apenas Lucro Bruto e Faturamento.');
+                        }}
+                        className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                        title="Permitir Lucro Bruto e Faturamento, mantendo Lucro Líquido e Saldos protegidos"
+                      >
+                        Apenas Lucro Bruto & Vendas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempFinPerms({
+                            canViewGrossProfit: true,
+                            canViewNetProfit: true,
+                            canViewTotalRevenue: true,
+                            canViewProfitMargin: true,
+                            canViewProductCosts: true,
+                            canViewCashBalances: true,
+                          });
+                          toast.info('Acesso total liberado para todos os indicadores financeiros.');
+                        }}
+                        className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                        title="Liberar todos os números e lucros da empresa para este usuário"
+                      >
+                        Liberar Todos os Indicadores
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista de Métricas Sensíveis */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    {/* 1. LUCRO BRUTO */}
+                    <div
+                      onClick={() =>
+                        setTempFinPerms((prev) => ({ ...prev, canViewGrossProfit: !prev.canViewGrossProfit }))
+                      }
+                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        tempFinPerms.canViewGrossProfit
+                          ? 'bg-emerald-50/50 border-emerald-300 shadow-2xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                            <TrendingUp size={16} className={tempFinPerms.canViewGrossProfit ? 'text-emerald-600' : 'text-slate-400'} />
+                            <span>Visualizar Lucro Bruto (Real)</span>
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            tempFinPerms.canViewGrossProfit ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {tempFinPerms.canViewGrossProfit ? 'Permitido' : 'Oculto / Bloqueado'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          Permite ao usuário visualizar o <strong>Lucro Bruto Real</strong> em R$ (Receita de Vendas menos Custo CMV). 
+                          Quando desativado, o Lucro Bruto é substituído por aviso de informação restrita no Dashboard e relatórios.
+                        </p>
+                        <div className="p-2 bg-amber-50/80 rounded-lg border border-amber-200/80 text-[11px] text-amber-900 font-medium">
+                          💡 <em>Recomendado ocultar para balconistas e vendedores de balcão que não devam saber o lucro bruto da empresa.</em>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 mt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Status para este usuário:</span>
+                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          tempFinPerms.canViewGrossProfit ? 'bg-emerald-600' : 'bg-slate-300'
+                        }`}>
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            tempFinPerms.canViewGrossProfit ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. LUCRO LÍQUIDO & DRE */}
+                    <div
+                      onClick={() =>
+                        setTempFinPerms((prev) => ({ ...prev, canViewNetProfit: !prev.canViewNetProfit }))
+                      }
+                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        tempFinPerms.canViewNetProfit
+                          ? 'bg-emerald-50/50 border-emerald-300 shadow-2xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                            <DollarSign size={16} className={tempFinPerms.canViewNetProfit ? 'text-emerald-600' : 'text-slate-400'} />
+                            <span>Visualizar Lucro Líquido & DRE</span>
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            tempFinPerms.canViewNetProfit ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {tempFinPerms.canViewNetProfit ? 'Permitido' : 'Oculto / Bloqueado'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          Permite visualizar o <strong>Lucro Líquido</strong> final da empresa após dedução de todas as despesas fixas, despesas operacionais, comissões e impostos (DRE - Demonstrativo de Resultados).
+                        </p>
+                        <div className="p-2 bg-rose-50/80 rounded-lg border border-rose-200/80 text-[11px] text-rose-900 font-medium">
+                          🔒 <em>Dado de máxima confidencialidade da diretoria. Mantenha desativado para usuários operacionais e vendedores.</em>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 mt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Status para este usuário:</span>
+                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          tempFinPerms.canViewNetProfit ? 'bg-emerald-600' : 'bg-slate-300'
+                        }`}>
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            tempFinPerms.canViewNetProfit ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. FATURAMENTO TOTAL / RECEITA GLOBAL */}
+                    <div
+                      onClick={() =>
+                        setTempFinPerms((prev) => ({ ...prev, canViewTotalRevenue: !prev.canViewTotalRevenue }))
+                      }
+                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        tempFinPerms.canViewTotalRevenue
+                          ? 'bg-blue-50/50 border-blue-300 shadow-2xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                            <BarChart3 size={16} className={tempFinPerms.canViewTotalRevenue ? 'text-blue-600' : 'text-slate-400'} />
+                            <span>Visualizar Faturamento Global</span>
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            tempFinPerms.canViewTotalRevenue ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {tempFinPerms.canViewTotalRevenue ? 'Permitido' : 'Oculto / Bloqueado'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          Permite ver o montante total de faturamento em R$ da empresa no dia, mês e ano no Dashboard e relatórios consolidados.
+                        </p>
+                      </div>
+
+                      <div className="pt-3 mt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Status para este usuário:</span>
+                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          tempFinPerms.canViewTotalRevenue ? 'bg-blue-600' : 'bg-slate-300'
+                        }`}>
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            tempFinPerms.canViewTotalRevenue ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. MARGEM DE LUCRO (%) & MARKUP */}
+                    <div
+                      onClick={() =>
+                        setTempFinPerms((prev) => ({ ...prev, canViewProfitMargin: !prev.canViewProfitMargin }))
+                      }
+                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        tempFinPerms.canViewProfitMargin
+                          ? 'bg-blue-50/50 border-blue-300 shadow-2xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                            <Percent size={16} className={tempFinPerms.canViewProfitMargin ? 'text-blue-600' : 'text-slate-400'} />
+                            <span>Visualizar Margens (%) & Markup</span>
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            tempFinPerms.canViewProfitMargin ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {tempFinPerms.canViewProfitMargin ? 'Permitido' : 'Oculto / Bloqueado'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          Permite consultar os percentuais exatos de margem de contribuição sobre a venda e índices de markup aplicados aos produtos e propostas comerciais.
+                        </p>
+                      </div>
+
+                      <div className="pt-3 mt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Status para este usuário:</span>
+                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          tempFinPerms.canViewProfitMargin ? 'bg-blue-600' : 'bg-slate-300'
+                        }`}>
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            tempFinPerms.canViewProfitMargin ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 5. CUSTO DE PRODUTOS & CMV */}
+                    <div
+                      onClick={() =>
+                        setTempFinPerms((prev) => ({ ...prev, canViewProductCosts: !prev.canViewProductCosts }))
+                      }
+                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        tempFinPerms.canViewProductCosts
+                          ? 'bg-blue-50/50 border-blue-300 shadow-2xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                            <Warehouse size={16} className={tempFinPerms.canViewProductCosts ? 'text-blue-600' : 'text-slate-400'} />
+                            <span>Visualizar Custo de Fornecedores</span>
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            tempFinPerms.canViewProductCosts ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {tempFinPerms.canViewProductCosts ? 'Permitido' : 'Oculto / Bloqueado'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          Permite ver o preço de compra de fornecedores e o custo unitário de mercadorias e matérias-primas no catálogo e no estoque.
+                        </p>
+                      </div>
+
+                      <div className="pt-3 mt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Status para este usuário:</span>
+                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          tempFinPerms.canViewProductCosts ? 'bg-blue-600' : 'bg-slate-300'
+                        }`}>
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            tempFinPerms.canViewProductCosts ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 6. SALDOS EM CAIXA & CONTAS BANCÁRIAS */}
+                    <div
+                      onClick={() =>
+                        setTempFinPerms((prev) => ({ ...prev, canViewCashBalances: !prev.canViewCashBalances }))
+                      }
+                      className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        tempFinPerms.canViewCashBalances
+                          ? 'bg-blue-50/50 border-blue-300 shadow-2xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                            <CircleDollarSign size={16} className={tempFinPerms.canViewCashBalances ? 'text-blue-600' : 'text-slate-400'} />
+                            <span>Visualizar Saldos Bancários & Caixa</span>
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            tempFinPerms.canViewCashBalances ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {tempFinPerms.canViewCashBalances ? 'Permitido' : 'Oculto / Bloqueado'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          Permite consultar saldos disponíveis em contas correntes, caixas da empresa e totais acumulados de títulos a pagar e a receber.
+                        </p>
+                      </div>
+
+                      <div className="pt-3 mt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Status para este usuário:</span>
+                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          tempFinPerms.canViewCashBalances ? 'bg-blue-600' : 'bg-slate-300'
+                        }`}>
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            tempFinPerms.canViewCashBalances ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ======================================================== */}
+              {/* ABA 2: CONTROLE GRANULAR DE MENUS E SUBMENUS             */}
+              {/* ======================================================== */}
+              {permModalTab === 'menus' && (
+                <div className="space-y-4">
+                  {/* Barra de Ações e Busca */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-100">
+                    <div className="relative flex-1">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar menu ou submódulo (ex: Romaneio, Pedidos, Caixa)..."
+                        value={permMenuSearch}
+                        onChange={(e) => setPermMenuSearch(e.target.value)}
+                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                      />
+                      {permMenuSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setPermMenuSearch('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllMenus}
+                        className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-lg border border-indigo-200 transition-colors cursor-pointer"
+                        title="Marcar todos os menus e submenus como permitidos para este usuário"
+                      >
+                        Marcar Todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeselectAllMenus}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                        title="Desmarcar todos os menus (deixando apenas o Início/Dashboard)"
+                      >
+                        Bloquear Todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResetToRoleDefaults}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg border border-slate-200 transition-colors cursor-pointer flex items-center gap-1"
+                        title="Restaurar a configuração padrão recomendada para a função deste usuário"
+                      >
+                        <RotateCcw size={12} />
+                        <span>Padrão do Cargo</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista de Seções e Submenus */}
+                  <div className="space-y-3">
+                    {MENU_SECTIONS_CATALOG.filter((sec) => {
+                      if (!permMenuSearch.trim()) return true;
+                      const term = permMenuSearch.toLowerCase().trim();
+                      const matchSection = sec.label.toLowerCase().includes(term) || sec.description.toLowerCase().includes(term);
+                      const matchSub = sec.subItems?.some(
+                        (sub) => sub.label.toLowerCase().includes(term) || sub.description.toLowerCase().includes(term)
+                      );
+                      return matchSection || matchSub;
+                    }).map((section) => {
+                      const isSectionAllowed = tempAllowedSections.includes(section.id);
+                      const sectionSubIds = section.subItems?.map((s) => s.id) || [];
+                      const allowedSubsCount = sectionSubIds.filter((id) => tempAllowedSubItems.includes(id)).length;
+                      const isFullyAllowed = sectionSubIds.length > 0 && allowedSubsCount === sectionSubIds.length;
+                      const isPartiallyAllowed = allowedSubsCount > 0 && allowedSubsCount < sectionSubIds.length;
+
+                      const isConfigSection = section.id === 'configuracoes';
+                      const isTargetUserAdmin = userConfiguringPermissions.login === 'admin';
+
+                      return (
+                        <div
+                          key={section.id}
+                          className={`rounded-xl border transition-all overflow-hidden ${
+                            isSectionAllowed
+                              ? 'bg-white border-slate-200 shadow-2xs'
+                              : 'bg-slate-50/70 border-slate-200/80 opacity-70'
+                          }`}
+                        >
+                          {/* Cabeçalho da Seção */}
+                          <div className="p-3 bg-slate-50/90 border-b border-slate-100 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                disabled={isConfigSection && !isTargetUserAdmin}
+                                onClick={() => handleTogglePermSection(section.id)}
+                                className={`w-5 h-5 rounded flex items-center justify-center transition-colors cursor-pointer ${
+                                  isFullyAllowed
+                                    ? 'bg-indigo-600 text-white'
+                                    : isPartiallyAllowed
+                                    ? 'bg-indigo-100 text-indigo-700 border border-indigo-400'
+                                    : 'border border-slate-300 bg-white hover:border-slate-400 text-transparent'
+                                } ${isConfigSection && !isTargetUserAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                title={
+                                  isConfigSection && !isTargetUserAdmin
+                                    ? 'Aba de configurações administrativas é restrita apenas ao usuário admin master'
+                                    : 'Marcar / Desmarcar todos os submenus deste menu'
+                                }
+                              >
+                                {isFullyAllowed ? <Check size={14} strokeWidth={3} /> : isPartiallyAllowed ? '–' : null}
+                              </button>
+
+                              <div className="flex items-center gap-2">
+                                <span className={`p-1.5 rounded-lg ${isSectionAllowed ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
+                                  {renderMenuIcon(section.iconName, 16)}
+                                </span>
+                                <div>
+                                  <span className="font-extrabold text-xs text-slate-900 block flex items-center gap-1.5">
+                                    <span>Menu: {section.label}</span>
+                                    {isConfigSection && (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                        Admin Master
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 hidden sm:block">
+                                    {section.description}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                isFullyAllowed
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : allowedSubsCount > 0
+                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                  : 'bg-slate-200 text-slate-600'
+                              }`}>
+                                {allowedSubsCount} de {sectionSubIds.length} submenus
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Grade de Submenus */}
+                          {section.subItems && section.subItems.length > 0 && (
+                            <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white">
+                              {section.subItems.map((sub) => {
+                                const isSubAllowed = tempAllowedSubItems.includes(sub.id);
+                                const isRestrictedAdminSub =
+                                  (sub.id === 'settings' || sub.id === 'settings_menus' || sub.id === 'settings_supabase') &&
+                                  !isTargetUserAdmin;
+
+                                return (
+                                  <div
+                                    key={sub.id}
+                                    onClick={() => {
+                                      if (isRestrictedAdminSub) return;
+                                      handleTogglePermSubItem(section.id, sub.id);
+                                    }}
+                                    className={`p-2.5 rounded-lg border text-xs flex items-start justify-between gap-2 transition-all cursor-pointer ${
+                                      isRestrictedAdminSub
+                                        ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                                        : isSubAllowed
+                                        ? 'bg-indigo-50/40 border-indigo-200 text-slate-900'
+                                        : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      <div
+                                        className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center transition-colors shrink-0 ${
+                                          isRestrictedAdminSub
+                                            ? 'bg-slate-200 text-slate-400'
+                                            : isSubAllowed
+                                            ? 'bg-indigo-600 text-white'
+                                            : 'border border-slate-300 bg-white'
+                                        }`}
+                                      >
+                                        {isSubAllowed ? <Check size={12} strokeWidth={3} /> : null}
+                                      </div>
+                                      <div>
+                                        <div className="font-bold flex items-center gap-1.5">
+                                          <span>{sub.label}</span>
+                                          {sub.shortcut && (
+                                            <span className="font-mono text-[9px] font-bold px-1 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                              {sub.shortcut}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                                          {sub.description}
+                                        </div>
+                                        {isRestrictedAdminSub && (
+                                          <div className="text-[10px] text-amber-700 font-bold mt-1">
+                                            Restrito ao Administrador Master
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé com Ações */}
+            <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-slate-500 text-center sm:text-left">
+                Salvando permissões para <strong>{userConfiguringPermissions.name}</strong> (@{userConfiguringPermissions.login})
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setUserConfiguringPermissions(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer w-full sm:w-auto text-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePermissionsConfig}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto"
+                >
+                  <ShieldCheck size={15} />
+                  <span>Salvar Permissões de Acesso</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <ChangePasswordModal
         isOpen={!!passwordChangeUser}
         onClose={() => setPasswordChangeUser(null)}

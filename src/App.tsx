@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Lock } from 'lucide-react';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
@@ -52,13 +53,26 @@ export default function App() {
   const navigateTo = (targetModule: string) => {
     if (targetModule === currentModule) return;
 
-    // Regra solicitada: apenas o usuário 'admin' poderá utilizar os submenus 'Empresa, Usuários & Auditoria' e 'Menu do Sistema'
-    if (!Database.isAdmin() && (targetModule === 'settings' || targetModule === 'settings_menus')) {
+    // Regra solicitada: apenas o usuário 'admin' poderá utilizar os submenus 'Empresa, Usuários & Auditoria', 'Menu do Sistema' e 'Banco Supabase'
+    if (!Database.isAdmin() && (targetModule === 'settings' || targetModule === 'settings_menus' || targetModule === 'settings_supabase')) {
       toast.error(
-        'Acesso restrito: apenas o usuário "admin" tem permissão para utilizar os submenus "Empresa, Usuários & Auditoria" e "Menu do Sistema".',
+        'Acesso restrito: apenas o usuário "admin" tem permissão para acessar os submenus administrativos do sistema.',
         'Permissão Insuficiente'
       );
       return;
+    }
+
+    // Checagem de permissões granulares definidas pelo admin para este usuário
+    if (!Database.isAdmin()) {
+      const isAllowedSub = Database.isSubItemAllowedForCurrentUser(targetModule);
+      const isAllowedSec = Database.isMenuSectionAllowedForCurrentUser(targetModule);
+      if (!isAllowedSub && !isAllowedSec && targetModule !== 'dashboard') {
+        toast.error(
+          'Acesso restrito: seu perfil de usuário não possui permissão concedida pelo administrador para utilizar este recurso.',
+          'Módulo Bloqueado'
+        );
+        return;
+      }
     }
 
     // Se o usuário iniciou uma venda (pelo menos 1 item no carrinho do PDV) e tenta ir para qualquer outro menu:
@@ -251,6 +265,51 @@ export default function App() {
   }, [currentModule]);
 
   const renderModule = () => {
+    // Verificação de segurança: se o usuário não for admin, bloquear acesso a módulos restritos
+    if (!Database.isAdmin()) {
+      if (currentModule === 'settings' || currentModule === 'settings_menus' || currentModule === 'settings_supabase') {
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50 min-h-[60vh]">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3 border border-amber-200">
+              <Lock size={26} />
+            </div>
+            <h2 className="text-base font-bold text-slate-800">Acesso Restrito ao Administrador</h2>
+            <p className="text-xs text-slate-500 max-w-md mt-1 mb-4">
+              Apenas o usuário "admin" tem autorização para acessar as configurações de empresas, usuários, banco de dados e menus.
+            </p>
+            <button
+              onClick={() => setCurrentModule('dashboard')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              Voltar ao Início
+            </button>
+          </div>
+        );
+      }
+
+      const isAllowedSub = Database.isSubItemAllowedForCurrentUser(currentModule);
+      const isAllowedSec = Database.isMenuSectionAllowedForCurrentUser(currentModule);
+      if (!isAllowedSub && !isAllowedSec && currentModule !== 'dashboard') {
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50 min-h-[60vh]">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3 border border-amber-200">
+              <Lock size={26} />
+            </div>
+            <h2 className="text-base font-bold text-slate-800">Recurso Bloqueado pelo Administrador</h2>
+            <p className="text-xs text-slate-500 max-w-md mt-1 mb-4">
+              Seu perfil de usuário não possui permissão concedida pelo administrador para visualizar ou utilizar este menu/módulo.
+            </p>
+            <button
+              onClick={() => setCurrentModule('dashboard')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              Voltar ao Início
+            </button>
+          </div>
+        );
+      }
+    }
+
     switch (currentModule) {
       case 'dashboard':
         return <DashboardView onNavigate={navigateTo} />;

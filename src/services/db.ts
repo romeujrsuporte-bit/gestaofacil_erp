@@ -784,6 +784,210 @@ export const DEFAULT_DELIVERY_MANIFESTS: DeliveryManifest[] = [
   },
 ];
 
+export const DEFAULT_ROLE_MENU_SECTIONS: Record<UserRole, string[]> = {
+  admin: [
+    'inicio',
+    'vendas',
+    'cadastros',
+    'compras',
+    'estoque',
+    'producao',
+    'expedicao',
+    'precificacao',
+    'financeiro',
+    'relatorios',
+    'importacao',
+    'configuracoes',
+  ],
+  gerente: [
+    'inicio',
+    'vendas',
+    'cadastros',
+    'compras',
+    'estoque',
+    'producao',
+    'expedicao',
+    'precificacao',
+    'financeiro',
+    'relatorios',
+    'importacao',
+  ],
+  balconista: ['inicio', 'vendas', 'cadastros'],
+  vendedor_externo: ['inicio', 'vendas', 'cadastros'],
+  financeiro: ['inicio', 'financeiro', 'cadastros', 'compras', 'relatorios'],
+};
+
+export const DEFAULT_ROLE_SUB_ITEMS: Record<UserRole, string[]> = {
+  admin: [
+    'dashboard',
+    'pos',
+    'orders',
+    'orders_quotes',
+    'external_sales',
+    'orders_history',
+    'products',
+    'customers',
+    'suppliers',
+    'stock_locations',
+    'purchases',
+    'stock_transfers',
+    'inventory',
+    'stock_movements',
+    'bom_composition',
+    'components_catalog',
+    'production_orders',
+    'delivery_manifests',
+    'delivery_routes',
+    'delivery_market_areas',
+    'delivery_neighborhoods',
+    'delivery_cities',
+    'delivery_states',
+    'expedition_reports',
+    'pricing_calculator',
+    'batch_pricing',
+    'cash_flow',
+    'accounts_receivable',
+    'accounts_payable',
+    'cash_register',
+    'payment_methods',
+    'financial_accounts',
+    'payment_terms',
+    'financial_reports',
+    'reports',
+    'excel_tools',
+    'settings',
+    'settings_supabase',
+    'settings_menus',
+    'settings_preferences',
+    'settings_printer',
+  ],
+  gerente: [
+    'dashboard',
+    'pos',
+    'orders',
+    'orders_quotes',
+    'external_sales',
+    'orders_history',
+    'products',
+    'customers',
+    'suppliers',
+    'stock_locations',
+    'purchases',
+    'stock_transfers',
+    'inventory',
+    'stock_movements',
+    'bom_composition',
+    'components_catalog',
+    'production_orders',
+    'delivery_manifests',
+    'delivery_routes',
+    'delivery_market_areas',
+    'delivery_neighborhoods',
+    'delivery_cities',
+    'delivery_states',
+    'expedition_reports',
+    'pricing_calculator',
+    'batch_pricing',
+    'cash_flow',
+    'accounts_receivable',
+    'accounts_payable',
+    'cash_register',
+    'payment_methods',
+    'financial_accounts',
+    'payment_terms',
+    'financial_reports',
+    'reports',
+    'excel_tools',
+    'settings_preferences',
+    'settings_printer',
+  ],
+  balconista: [
+    'dashboard',
+    'pos',
+    'orders',
+    'orders_quotes',
+    'orders_history',
+    'products',
+    'customers',
+  ],
+  vendedor_externo: [
+    'dashboard',
+    'orders',
+    'orders_quotes',
+    'external_sales',
+    'products',
+    'customers',
+  ],
+  financeiro: [
+    'dashboard',
+    'cash_flow',
+    'accounts_receivable',
+    'accounts_payable',
+    'cash_register',
+    'payment_methods',
+    'financial_accounts',
+    'payment_terms',
+    'financial_reports',
+    'customers',
+    'suppliers',
+    'purchases',
+    'reports',
+  ],
+};
+
+export const DEFAULT_ROLE_FINANCIAL_PERMISSIONS: Record<
+  UserRole,
+  {
+    canViewGrossProfit: boolean;
+    canViewNetProfit: boolean;
+    canViewTotalRevenue: boolean;
+    canViewProfitMargin: boolean;
+    canViewProductCosts: boolean;
+    canViewCashBalances: boolean;
+  }
+> = {
+  admin: {
+    canViewGrossProfit: true,
+    canViewNetProfit: true,
+    canViewTotalRevenue: true,
+    canViewProfitMargin: true,
+    canViewProductCosts: true,
+    canViewCashBalances: true,
+  },
+  gerente: {
+    canViewGrossProfit: true,
+    canViewNetProfit: false,
+    canViewTotalRevenue: true,
+    canViewProfitMargin: true,
+    canViewProductCosts: true,
+    canViewCashBalances: true,
+  },
+  balconista: {
+    canViewGrossProfit: false,
+    canViewNetProfit: false,
+    canViewTotalRevenue: false,
+    canViewProfitMargin: false,
+    canViewProductCosts: false,
+    canViewCashBalances: false,
+  },
+  vendedor_externo: {
+    canViewGrossProfit: false,
+    canViewNetProfit: false,
+    canViewTotalRevenue: false,
+    canViewProfitMargin: false,
+    canViewProductCosts: false,
+    canViewCashBalances: false,
+  },
+  financeiro: {
+    canViewGrossProfit: false,
+    canViewNetProfit: false,
+    canViewTotalRevenue: true,
+    canViewProfitMargin: false,
+    canViewProductCosts: false,
+    canViewCashBalances: true,
+  },
+};
+
 export class Database {
   private static state: DatabaseState | null = null;
   private static listeners: Array<() => void> = [];
@@ -1338,14 +1542,68 @@ export class Database {
             });
           }
 
-          // Migração e garantia de senhas dos usuários
+          // Migração e garantia de senhas e permissões de menus/números dos usuários
           if (this.state.users && this.state.users.length > 0) {
             this.state.users = this.state.users.map((u) => {
-              if (!u.password) {
+              let updated = false;
+              let pwd = u.password;
+              if (!pwd) {
+                pwd = u.login === 'admin' ? 'admin' : '1234';
+                updated = true;
+              }
+
+              const role = u.role || 'balconista';
+              const finDefaults = DEFAULT_ROLE_FINANCIAL_PERMISSIONS[role] || DEFAULT_ROLE_FINANCIAL_PERMISSIONS.balconista;
+              const menuDefaults = DEFAULT_ROLE_MENU_SECTIONS[role] || DEFAULT_ROLE_MENU_SECTIONS.balconista;
+              const subItemDefaults = DEFAULT_ROLE_SUB_ITEMS[role] || DEFAULT_ROLE_SUB_ITEMS.balconista;
+
+              const perms: UserPermissions = {
+                ...u.permissions,
+                canViewGrossProfit:
+                  u.permissions.canViewGrossProfit !== undefined
+                    ? u.permissions.canViewGrossProfit
+                    : finDefaults.canViewGrossProfit,
+                canViewNetProfit:
+                  u.permissions.canViewNetProfit !== undefined
+                    ? u.permissions.canViewNetProfit
+                    : finDefaults.canViewNetProfit,
+                canViewTotalRevenue:
+                  u.permissions.canViewTotalRevenue !== undefined
+                    ? u.permissions.canViewTotalRevenue
+                    : finDefaults.canViewTotalRevenue,
+                canViewProfitMargin:
+                  u.permissions.canViewProfitMargin !== undefined
+                    ? u.permissions.canViewProfitMargin
+                    : finDefaults.canViewProfitMargin,
+                canViewProductCosts:
+                  u.permissions.canViewProductCosts !== undefined
+                    ? u.permissions.canViewProductCosts
+                    : (u.permissions.canViewCosts ?? finDefaults.canViewProductCosts),
+                canViewCashBalances:
+                  u.permissions.canViewCashBalances !== undefined
+                    ? u.permissions.canViewCashBalances
+                    : finDefaults.canViewCashBalances,
+                allowedMenuSections:
+                  u.permissions.allowedMenuSections || (u.login === 'admin' ? undefined : [...menuDefaults]),
+                allowedSubItems:
+                  u.permissions.allowedSubItems || (u.login === 'admin' ? undefined : [...subItemDefaults]),
+              };
+
+              if (
+                u.permissions.canViewGrossProfit === undefined ||
+                u.permissions.canViewNetProfit === undefined ||
+                !u.permissions.allowedMenuSections ||
+                !u.password
+              ) {
+                updated = true;
+              }
+
+              if (updated) {
                 stateNeedsPersist = true;
                 return {
                   ...u,
-                  password: u.login === 'admin' ? 'admin' : '1234',
+                  password: pwd,
+                  permissions: perms,
                 };
               }
               return u;
@@ -1624,6 +1882,102 @@ export class Database {
   public static isAdmin(user?: User): boolean {
     const u = user || this.getCurrentUser();
     return u?.login === 'admin';
+  }
+
+  public static canCurrentUserView(
+    metric: 'grossProfit' | 'netProfit' | 'totalRevenue' | 'profitMargin' | 'productCosts' | 'cashBalances'
+  ): boolean {
+    const user = this.getCurrentUser();
+    if (user.login === 'admin') return true;
+    const perms = user.permissions;
+    const role = user.role || 'balconista';
+    const finDefaults = DEFAULT_ROLE_FINANCIAL_PERMISSIONS[role] || DEFAULT_ROLE_FINANCIAL_PERMISSIONS.balconista;
+
+    switch (metric) {
+      case 'grossProfit':
+        return perms.canViewGrossProfit !== undefined ? perms.canViewGrossProfit : finDefaults.canViewGrossProfit;
+      case 'netProfit':
+        return perms.canViewNetProfit !== undefined ? perms.canViewNetProfit : finDefaults.canViewNetProfit;
+      case 'totalRevenue':
+        return perms.canViewTotalRevenue !== undefined ? perms.canViewTotalRevenue : finDefaults.canViewTotalRevenue;
+      case 'profitMargin':
+        return perms.canViewProfitMargin !== undefined ? perms.canViewProfitMargin : finDefaults.canViewProfitMargin;
+      case 'productCosts':
+        return perms.canViewProductCosts !== undefined ? perms.canViewProductCosts : (perms.canViewCosts ?? finDefaults.canViewProductCosts);
+      case 'cashBalances':
+        return perms.canViewCashBalances !== undefined ? perms.canViewCashBalances : finDefaults.canViewCashBalances;
+      default:
+        return false;
+    }
+  }
+
+  public static isMenuSectionAllowedForCurrentUser(sectionId: string): boolean {
+    const user = this.getCurrentUser();
+    if (user.login === 'admin') return true;
+    if (sectionId === 'configuracoes') return false; // Apenas o admin master
+
+    if (Array.isArray(user.permissions.allowedMenuSections)) {
+      return user.permissions.allowedMenuSections.includes(sectionId);
+    }
+    const role = user.role || 'balconista';
+    const roleDefaults = DEFAULT_ROLE_MENU_SECTIONS[role];
+    if (roleDefaults) {
+      return roleDefaults.includes(sectionId);
+    }
+    return true;
+  }
+
+  public static isSubItemAllowedForCurrentUser(subItemId: string): boolean {
+    const user = this.getCurrentUser();
+    if (user.login === 'admin') return true;
+    if (subItemId === 'settings' || subItemId === 'settings_menus' || subItemId === 'settings_supabase') {
+      return false; // Apenas o admin master
+    }
+
+    if (Array.isArray(user.permissions.allowedSubItems)) {
+      return user.permissions.allowedSubItems.includes(subItemId);
+    }
+    const role = user.role || 'balconista';
+    const roleDefaults = DEFAULT_ROLE_SUB_ITEMS[role];
+    if (roleDefaults) {
+      return roleDefaults.includes(subItemId);
+    }
+    return true;
+  }
+
+  public static updateUserPermissions(
+    targetUserId: string,
+    newPermissions: Partial<UserPermissions>,
+    requestingUserId: string
+  ): { success: boolean; error?: string } {
+    const state = this.getState();
+    const requestingUser = state.users.find((u) => u.id === requestingUserId) || this.getCurrentUser();
+    if (requestingUser.login !== 'admin') {
+      return {
+        success: false,
+        error: 'Apenas o usuário "admin" tem autorização para configurar permissões de menus e números da empresa.',
+      };
+    }
+
+    const targetUser = state.users.find((u) => u.id === targetUserId);
+    if (!targetUser) {
+      return { success: false, error: 'Usuário não encontrado.' };
+    }
+
+    targetUser.permissions = {
+      ...targetUser.permissions,
+      ...newPermissions,
+    };
+
+    this.addAuditLog(
+      'PERMISSOES_CONFIGURADAS',
+      'USUARIOS',
+      targetUser.id,
+      `Permissões de menus e números da empresa atualizadas pelo administrador para o usuário ${targetUser.name} (@${targetUser.login})`
+    );
+
+    this.persist();
+    return { success: true };
   }
 
   public static addAuditLog(action: string, module: string, recordId: string, details: string) {

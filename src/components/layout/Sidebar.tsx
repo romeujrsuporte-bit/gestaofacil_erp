@@ -249,11 +249,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const visibleMenuSections = useMemo(() => {
     return menuSections
       .filter((section) => {
-        // Seção oculta pelo usuário nas configurações (configuracoes permanece visível como salvaguarda)
+        // Seção oculta nas preferências do sistema
         if (section.id !== 'configuracoes' && menuConfig.hiddenSections.includes(section.id)) {
           return false;
         }
+        // Permissões gerais de perfil
         if (section.requiredPermission && !permissions[section.requiredPermission]) {
+          return false;
+        }
+        // Permissões granulares de menus definidas pelo administrador para este usuário
+        if (!isAdmin && !Database.isMenuSectionAllowedForCurrentUser(section.id)) {
           return false;
         }
         return true;
@@ -261,12 +266,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       .map((section) => {
         if (!section.subItems) return section;
         const visibleSubs = section.subItems.filter((sub) => {
-          // Regra solicitada: apenas o usuário "admin" poderá utilizar os submenus "Empresa, Usuários & Auditoria" e "Menu do Sistema"
-          if (!isAdmin && (sub.id === 'settings' || sub.id === 'settings_menus')) {
+          // Apenas o usuário "admin" poderá utilizar os submenus administrativos
+          if (!isAdmin && (sub.id === 'settings' || sub.id === 'settings_menus' || sub.id === 'settings_supabase')) {
             return false;
           }
-          return !menuConfig.hiddenSubItems.includes(sub.id);
+          // Submenu oculto globalmente nas preferências
+          if (menuConfig.hiddenSubItems.includes(sub.id)) {
+            return false;
+          }
+          // Permissão granular do submenu definida pelo admin para este usuário
+          if (!isAdmin && !Database.isSubItemAllowedForCurrentUser(sub.id)) {
+            return false;
+          }
+          return true;
         });
+
         return {
           ...section,
           defaultModule: !isAdmin && section.id === 'configuracoes' ? 'settings_preferences' : section.defaultModule,
@@ -279,7 +293,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
         return true;
       });
-  }, [menuSections, menuConfig, permissions]);
+  }, [menuSections, menuConfig, permissions, currentUser]);
 
   const handleSubItemClick = (id: string) => {
     onNavigate(id);

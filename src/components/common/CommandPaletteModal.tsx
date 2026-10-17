@@ -331,9 +331,17 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const isAdmin = Database.isAdmin();
 
   const filteredCommands = COMMANDS.filter((cmd) => {
-    // Regra solicitada: apenas o usuário 'admin' poderá utilizar 'Empresa, Usuários & Auditoria' e 'Menu do Sistema'
-    if (!isAdmin && (cmd.targetModule === 'settings' || cmd.targetModule === 'settings_menus')) {
+    // Regra: apenas o usuário 'admin' poderá utilizar submenus administrativos
+    if (!isAdmin && (cmd.targetModule === 'settings' || cmd.targetModule === 'settings_menus' || cmd.targetModule === 'settings_supabase')) {
       return false;
+    }
+    // Filtrar módulos não permitidos para o usuário atual
+    if (!isAdmin && cmd.targetModule && cmd.targetModule !== 'dashboard') {
+      const isAllowedSub = Database.isSubItemAllowedForCurrentUser(cmd.targetModule);
+      const isAllowedSec = Database.isMenuSectionAllowedForCurrentUser(cmd.targetModule);
+      if (!isAllowedSub && !isAllowedSec) {
+        return false;
+      }
     }
     if (!query.trim()) return true;
     const q = query.toLowerCase().trim();
