@@ -991,6 +991,7 @@ export const DEFAULT_ROLE_FINANCIAL_PERMISSIONS: Record<
 export class Database {
   private static state: DatabaseState | null = null;
   private static listeners: Array<() => void> = [];
+  private static onPersistListeners: Array<() => void> = [];
 
   public static subscribe(listener: () => void): () => void {
     this.listeners.push(listener);
@@ -999,8 +1000,21 @@ export class Database {
     };
   }
 
+  public static onPersist(listener: () => void): () => void {
+    this.onPersistListeners.push(listener);
+    return () => {
+      this.onPersistListeners = this.onPersistListeners.filter((l) => l !== listener);
+    };
+  }
+
   private static notify() {
-    this.listeners.forEach((listener) => listener());
+    this.listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (err) {
+        console.error('Erro em listener do Database:', err);
+      }
+    });
   }
 
   public static getState(): DatabaseState {
@@ -1610,6 +1624,38 @@ export class Database {
             });
           }
 
+          // Garante a existência do produto demonstrativo de Embalagem Master
+          if (this.state.products && !this.state.products.some((p) => p.isMasterPack)) {
+            const baseProd = this.state.products.find((p) => p.id === 'prod-detergente-500' || p.code === 'PA-301') || this.state.products[0];
+            if (baseProd) {
+              const masterPackSample: Product = {
+                id: 'prod-master-detergente-cx24',
+                code: 'CX-301-24',
+                description: `Caixa ${baseProd.description} c/ 24 UN`,
+                unit: 'CX',
+                costPrice: Number((baseProd.costPrice * 24).toFixed(2)),
+                salePrice: Number((baseProd.salePrice * 24 * 0.95).toFixed(2)),
+                family: baseProd.family || 'Produtos Próprios',
+                group: 'Embalagens Master',
+                barcode: '7891112223240',
+                minStock: 5,
+                productType: 'revenda',
+                hasComposition: false,
+                defaultLocationId: baseProd.defaultLocationId || 'loc-comercial',
+                status: 'ativo',
+                notes: `Embalagem Master contendo 24 unidades do item ${baseProd.code} - ${baseProd.description}. Controle de estoque integrado automaticamente ao item unitário.`,
+                isMasterPack: true,
+                masterPackAssociatedProductId: baseProd.id,
+                masterPackAssociatedProductCode: baseProd.code,
+                masterPackAssociatedProductDescription: baseProd.description,
+                masterPackUnits: 24,
+                masterPackPackagingType: 'caixa',
+              };
+              this.state.products.push(masterPackSample);
+              stateNeedsPersist = true;
+            }
+          }
+
           if (stateNeedsPersist) {
             this.persist();
           }
@@ -1635,6 +1681,13 @@ export class Database {
       }
     }
     this.notify();
+    this.onPersistListeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (err) {
+        console.error('Erro ao acionar listener de persistência:', err);
+      }
+    });
   }
 
   public static resetToFactoryDefaults() {
@@ -1659,6 +1712,148 @@ export class Database {
     } catch (e) {
       console.error('Falha ao restaurar banco:', e);
       return false;
+    }
+  }
+
+  public static getLastRemoteSyncTime(): string | null {
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        return localStorage.getItem(DB_KEY_PREFIX + 'last_remote_sync');
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  public static setLastRemoteSyncTime(timeIso: string): void {
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(DB_KEY_PREFIX + 'last_remote_sync', timeIso);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Aplica um estado remoto diretamente recebido do Supabase sem disparar onPersist
+   * (evitando loop recursivo de sincronização).
+   */
+  public static applyRemoteState(remoteState: DatabaseState, remoteSyncTime?: string): boolean {
+    try {
+      if (!remoteState || !Array.isArray(remoteState.companies) || !Array.isArray(remoteState.products)) {
+        return false;
+      }
+      this.state = remoteState;
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(DB_KEY_PREFIX + 'state', JSON.stringify(this.state));
+          if (remoteSyncTime) {
+            localStorage.setItem(DB_KEY_PREFIX + 'last_remote_sync', remoteSyncTime);
+          }
+        } catch (e) {
+          console.error('Erro ao atualizar cache local com estado do Supabase:', e);
+        }
+      }
+      this.notify();
+      return true;
+    } catch (e) {
+      console.error('Falha ao aplicar estado remoto do Supabase:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Reconcilia com segurança os dados locais com os dados do Supabase.
+   * Preserva quaisquer registros criados localmente enquanto offline e
+   * atualiza os registros existentes com as alterações da nuvem.
+   */
+  public static reconcileWithRemote(
+    remoteState: DatabaseState,
+    remoteSyncTime?: string
+  ): { merged: boolean; localUnsyncedChanges: boolean } {
+    try {
+      if (!remoteState || !Array.isArray(remoteState.companies)) {
+        return { merged: false, localUnsyncedChanges: false };
+      }
+
+      const local = this.getState();
+      let hasLocalUnsynced = false;
+
+      // Mescla coleções preservando itens locais não sincronizados por ID
+      const mergeArrays = <T extends { id: string }>(
+        localArr: T[] | undefined,
+        remoteArr: T[] | undefined
+      ): T[] => {
+        const localList = localArr || [];
+        const remoteList = remoteArr || [];
+        const remoteMap = new Map<string, T>();
+        remoteList.forEach((item) => remoteMap.set(item.id, item));
+
+        const localOnlyItems: T[] = [];
+        localList.forEach((lItem) => {
+          if (!remoteMap.has(lItem.id)) {
+            localOnlyItems.push(lItem);
+            hasLocalUnsynced = true;
+          }
+        });
+
+        return [...remoteList, ...localOnlyItems];
+      };
+
+      const mergedState: DatabaseState = {
+        ...remoteState,
+        currentCompanyId: local.currentCompanyId || remoteState.currentCompanyId,
+        currentUserId: local.currentUserId || remoteState.currentUserId,
+        companies: mergeArrays(local.companies, remoteState.companies),
+        users: mergeArrays(local.users, remoteState.users),
+        customers: mergeArrays(local.customers, remoteState.customers),
+        suppliers: mergeArrays(local.suppliers, remoteState.suppliers),
+        products: mergeArrays(local.products, remoteState.products),
+        components: mergeArrays(local.components, remoteState.components),
+        orders: mergeArrays(local.orders, remoteState.orders),
+        deliveryRoutes: mergeArrays(local.deliveryRoutes, remoteState.deliveryRoutes),
+        deliveryManifests: mergeArrays(local.deliveryManifests, remoteState.deliveryManifests),
+        stockLocations: mergeArrays(local.stockLocations, remoteState.stockLocations),
+        productionOrders: mergeArrays(local.productionOrders, remoteState.productionOrders),
+        purchaseOrders: mergeArrays(local.purchaseOrders, remoteState.purchaseOrders),
+        purchaseReceipts: mergeArrays(local.purchaseReceipts, remoteState.purchaseReceipts),
+        transferOrders: mergeArrays(local.transferOrders, remoteState.transferOrders),
+        inventoryCounts: mergeArrays(local.inventoryCounts, remoteState.inventoryCounts),
+        accountsReceivable: mergeArrays(local.accountsReceivable, remoteState.accountsReceivable),
+        accountsPayable: mergeArrays(local.accountsPayable, remoteState.accountsPayable),
+        cashRegisters: mergeArrays(local.cashRegisters, remoteState.cashRegisters),
+        auditLogs: mergeArrays(local.auditLogs, remoteState.auditLogs),
+        stockBalances: remoteState.stockBalances || local.stockBalances,
+        stockMovements: mergeArrays(local.stockMovements, remoteState.stockMovements),
+        paymentMethods: remoteState.paymentMethods || local.paymentMethods,
+        financialAccounts: mergeArrays(local.financialAccounts, remoteState.financialAccounts),
+        paymentTermsList: mergeArrays(local.paymentTermsList, remoteState.paymentTermsList),
+        marketAreas: mergeArrays(local.marketAreas, remoteState.marketAreas),
+        states: mergeArrays(local.states, remoteState.states),
+        cities: mergeArrays(local.cities, remoteState.cities),
+        neighborhoods: mergeArrays(local.neighborhoods, remoteState.neighborhoods),
+        printerConfig: remoteState.printerConfig || local.printerConfig,
+        sidebarMenuConfig: remoteState.sidebarMenuConfig || local.sidebarMenuConfig,
+      };
+
+      this.state = mergedState;
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(DB_KEY_PREFIX + 'state', JSON.stringify(this.state));
+          if (remoteSyncTime) {
+            localStorage.setItem(DB_KEY_PREFIX + 'last_remote_sync', remoteSyncTime);
+          }
+        } catch (e) {
+          console.error('Erro ao salvar estado reconciliado:', e);
+        }
+      }
+      this.notify();
+      return { merged: true, localUnsyncedChanges: hasLocalUnsynced };
+    } catch (e) {
+      console.error('Erro na reconciliação de dados com Supabase:', e);
+      return { merged: false, localUnsyncedChanges: false };
     }
   }
 
@@ -3554,6 +3749,35 @@ export class Database {
         otherCostsPercent: 1.0,
         profitMarginPercent: 25.0,
         notes: 'Não solta fiapos, ideal para vidros e bancadas',
+      },
+      // 5. Exemplo de Embalagem Master (Venda por Atacado / Caixa com 24 unidades)
+      {
+        id: 'prod-master-detergente-cx24',
+        code: 'CX-301-24',
+        description: 'Caixa Detergente Líquido Neutro 500ml c/ 24 UN',
+        unit: 'CX',
+        costPrice: 44.16, // 1.84 * 24
+        salePrice: 89.90, // Desconto atacado (unidade avulsa sai a 3.75)
+        family: 'Produtos Próprios',
+        group: 'Embalagens Master',
+        barcode: '7891112223240',
+        minStock: 5,
+        productType: 'revenda',
+        hasComposition: false,
+        defaultLocationId: 'loc-comercial',
+        status: 'ativo',
+        taxPercent: 6.0,
+        operatingExpensesPercent: 12.0,
+        salesCommissionPercent: 3.0,
+        otherCostsPercent: 2.0,
+        profitMarginPercent: 25.0,
+        notes: 'Embalagem Master contendo 24 frascos de Detergente Neutro 500ml. A baixa de estoque é realizada diretamente nas unidades do produto associado PA-301.',
+        isMasterPack: true,
+        masterPackAssociatedProductId: 'prod-detergente-500',
+        masterPackAssociatedProductCode: 'PA-301',
+        masterPackAssociatedProductDescription: 'Detergente Líquido Neutro Imperial 500ml',
+        masterPackUnits: 24,
+        masterPackPackagingType: 'caixa',
       },
     ];
 

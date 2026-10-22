@@ -57,6 +57,7 @@ export const FinancialReportsManager: React.FC = () => {
   const accounts = Database.getFinancialAccounts(currentCompany.id);
   const paymentMethods = Database.getPaymentMethods();
   const dbState = Database.getState();
+  const canViewCashBalances = Database.canCurrentUserView('cashBalances');
 
   // Função para aplicar predefinições de período
   const handlePeriodChange = (preset: 'hoje' | '7dias' | 'mes_atual' | '30dias' | 'todos') => {
@@ -647,7 +648,7 @@ export const FinancialReportsManager: React.FC = () => {
                     </span>
                   </div>
                   <div className="text-xl font-black text-slate-900 font-mono mt-2">
-                    {formatCurrency(acc.currentBalance)}
+                    {canViewCashBalances ? formatCurrency(acc.currentBalance) : '•••• (Oculto)'}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-1">
                     {acc.type === 'caixa' ? 'Frente de Loja' : `Banco: ${acc.bankName || ''} | Ag: ${acc.agency || '-'} | C/C: ${acc.accountNumber || '-'}`}
@@ -668,11 +669,11 @@ export const FinancialReportsManager: React.FC = () => {
                   <div>
                     <span className="font-bold text-slate-900 block">{a.name}</span>
                     <span className="text-[11px] text-slate-400">
-                      Saldo Inicial: {formatCurrency(a.initialBalance)} • Status: {a.status.toUpperCase()}
+                      Saldo Inicial: {canViewCashBalances ? formatCurrency(a.initialBalance) : '••••'} • Status: {a.status.toUpperCase()}
                     </span>
                   </div>
                   <span className="font-mono font-bold text-sm text-slate-900">
-                    {formatCurrency(a.currentBalance)}
+                    {canViewCashBalances ? formatCurrency(a.currentBalance) : '••••'}
                   </span>
                 </div>
               ))}

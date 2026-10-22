@@ -43,6 +43,7 @@ import {
   Percent,
   ChevronDown,
   Info,
+  Boxes,
   UserCheck,
   Hash,
   Receipt
@@ -297,6 +298,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         totalPrice: qty * product.salePrice,
         unitCost: product.costPrice,
         locationId: selectedLocationId,
+        isMasterPack: product.isMasterPack,
+        masterPackUnits: product.masterPackUnits,
+        masterPackAssociatedProductId: product.masterPackAssociatedProductId,
+        masterPackAssociatedProductCode: product.masterPackAssociatedProductCode,
       };
       setCart((prev) => [...prev, newItem]);
     }
@@ -397,6 +402,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         totalPrice: Math.round(netTotal * 100) / 100,
         unitCost: product.costPrice,
         locationId: selectedLocationId,
+        isMasterPack: product.isMasterPack,
+        masterPackUnits: product.masterPackUnits,
+        masterPackAssociatedProductId: product.masterPackAssociatedProductId,
+        masterPackAssociatedProductCode: product.masterPackAssociatedProductCode,
       };
       setCart((prev) => [...prev, newItem]);
     }
@@ -1642,9 +1651,17 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                               {item.productCode}
                             </td>
                             <td className="py-2 px-2.5">
-                              <span className="font-extrabold text-slate-900 text-xs block truncate max-w-[200px]" title={item.description}>
-                                {item.description}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-extrabold text-slate-900 text-xs block truncate max-w-[200px]" title={item.description}>
+                                  {item.description}
+                                </span>
+                                {item.isMasterPack && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-900 font-extrabold px-1.5 py-0.2 rounded border border-amber-300">
+                                    <Boxes size={10} className="text-amber-700" />
+                                    Master ({item.masterPackUnits} un/{item.unit})
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2 px-1 text-center font-semibold text-slate-500 text-[10px]">
                               {item.unit}

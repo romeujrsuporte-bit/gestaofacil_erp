@@ -52,6 +52,8 @@ export const PricingView: React.FC<{ initialSubTab?: 'individual' | 'em_lote' }>
   const [dbState, setDbState] = useState(Database.getState());
   const currentCompany = Database.getCurrentCompany();
   const currentUser = Database.getCurrentUser();
+  const canViewCosts = Database.canCurrentUserView('productCosts');
+  const canViewProfitMargin = Database.canCurrentUserView('profitMargin');
 
   useEffect(() => {
     return Database.subscribe(() => {
@@ -929,12 +931,12 @@ export const PricingView: React.FC<{ initialSubTab?: 'individual' | 'em_lote' }>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-bold uppercase">Custo Final do Produto:</span>
                   <span className="font-extrabold text-emerald-300 text-sm">
-                    {formatCurrency(calculationResult.effectiveCostPrice)} / {selectedProduct?.unit || 'un'}
+                    {canViewCosts ? `${formatCurrency(calculationResult.effectiveCostPrice)} / ${selectedProduct?.unit || 'un'}` : '•••• (Acesso Restrito)'}
                   </span>
                 </div>
                 {enableAdditionalCosts ? (
                   <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-700/60 font-semibold">
-                    Base ({formatCurrency(costPrice)}) + Adicionais (+{formatCurrency(indirectCostPerUnit + directLaborCostPerUnit)})
+                    {canViewCosts ? `Base (${formatCurrency(costPrice)}) + Adicionais (+${formatCurrency(indirectCostPerUnit + directLaborCostPerUnit)})` : 'Com Custos Adicionais'}
                   </span>
                 ) : (
                   <span className="text-[10px] text-slate-400">
@@ -948,13 +950,17 @@ export const PricingView: React.FC<{ initialSubTab?: 'individual' | 'em_lote' }>
                 <div>
                   <span className="text-slate-400 block text-[10px]">Margem s/ Preço Venda:</span>
                   <span className="font-bold text-white text-sm">
-                    {profitMarginPercent.toFixed(1)}% ({formatCurrency((calculationResult.suggestedSalePrice * profitMarginPercent) / 100)})
+                    {canViewProfitMargin
+                      ? `${profitMarginPercent.toFixed(1)}% (${formatCurrency((calculationResult.suggestedSalePrice * profitMarginPercent) / 100)})`
+                      : '•••• (Oculto)'}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px]">Markup Multiplicador:</span>
                   <span className="font-bold text-blue-400 text-sm">
-                    {calculationResult.markupMultiplier.toFixed(2)}x ({calculationResult.markupPercent.toFixed(1)}% s/ custo)
+                    {canViewProfitMargin
+                      ? `${calculationResult.markupMultiplier.toFixed(2)}x (${calculationResult.markupPercent.toFixed(1)}% s/ custo)`
+                      : '•••• (Oculto)'}
                   </span>
                 </div>
               </div>

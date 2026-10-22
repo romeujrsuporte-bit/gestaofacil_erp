@@ -43,6 +43,7 @@ import {
   Barcode,
   Warehouse,
   Tag,
+  Boxes,
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { Product, Customer, Order, OrderItem } from '../../types';
@@ -480,6 +481,10 @@ export const ExternalSalesView: React.FC = () => {
         totalPrice: product.salePrice,
         unitCost: product.costPrice,
         locationId: selectedLocationId || product.defaultLocationId || 'loc-comercial',
+        isMasterPack: product.isMasterPack,
+        masterPackUnits: product.masterPackUnits,
+        masterPackAssociatedProductId: product.masterPackAssociatedProductId,
+        masterPackAssociatedProductCode: product.masterPackAssociatedProductCode,
       };
       setCart([...cart, newItem]);
     }
@@ -1903,6 +1908,12 @@ export const ExternalSalesView: React.FC = () => {
                       >
                         Estoque {selectedLocationName}: {formatQuantity(availableQty)} {p.unit}
                       </span>
+                      {p.isMasterPack && (
+                        <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-900 font-extrabold px-1.5 py-0.2 rounded border border-amber-300">
+                          <Boxes size={10} className="text-amber-700" />
+                          Master ({p.masterPackUnits} un/{p.unit})
+                        </span>
+                      )}
                     </div>
                     <div className="font-extrabold text-xs sm:text-sm text-slate-900 mt-1 leading-snug truncate">
                       {p.description}
@@ -2068,8 +2079,14 @@ export const ExternalSalesView: React.FC = () => {
                 {cart.map((item) => (
                   <div key={item.id} className="py-2.5 flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-extrabold text-slate-900 leading-snug truncate">
-                        {item.description}
+                      <div className="text-xs font-extrabold text-slate-900 leading-snug truncate flex items-center gap-1.5 flex-wrap">
+                        <span>{item.description}</span>
+                        {item.isMasterPack && (
+                          <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-900 font-extrabold px-1.5 py-0.2 rounded border border-amber-300">
+                            <Boxes size={10} className="text-amber-700" />
+                            Master ({item.masterPackUnits} un/{item.unit})
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] text-slate-400 font-mono">

@@ -11,8 +11,10 @@ import {
   LogOut,
   ShieldCheck,
   User as UserIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { Database } from '../../services/db';
+import { SupabaseService, SupabaseConfig } from '../../services/supabaseService';
 import { toast } from '../../services/toast';
 import { GestaoFacilLogo } from '../common/AppLogo';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
@@ -40,7 +42,14 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
+  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(SupabaseService.getConfig());
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return SupabaseService.subscribe((cfg) => {
+      setSupabaseConfig(cfg);
+    });
+  }, []);
 
   // Fecha o menu de perfil ao clicar fora
   useEffect(() => {
@@ -54,13 +63,17 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleCompanyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    Database.setCurrentCompany(e.target.value);
+    const newCompanyId = e.target.value;
+    Database.setCurrentCompany(newCompanyId);
+    const targetComp = dbState.companies.find((c) => c.id === newCompanyId);
+    const compLabel = targetComp ? (targetComp.tradeName || targetComp.name) : newCompanyId;
     Database.addAuditLog(
       'TROCA_EMPRESA',
       'SISTEMA',
-      e.target.value,
-      `Usuário alternou contexto para empresa ID: ${e.target.value}`
+      newCompanyId,
+      `Usuário alternou contexto para empresa: ${compLabel} (ID: ${newCompanyId})`
     );
+    toast.success(`Visualizando dados da empresa: ${compLabel}`, 'Empresa Selecionada');
   };
 
   const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -82,8 +95,10 @@ export const Header: React.FC<HeaderProps> = ({
     .toUpperCase() || 'RM';
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-2xs h-16 flex items-center justify-between px-3 md:px-6">
-      {/* Lado Esquerdo: Menu Mobile & Logo GestãoFácil ERP */}
+    <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-2xs">
+      {/* Linha Principal do Cabeçalho */}
+      <div className="h-16 flex items-center justify-between px-3 md:px-6">
+        {/* Lado Esquerdo: Menu Mobile & Logo GestãoFácil ERP */}
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleSidebar}
@@ -139,16 +154,44 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Lado Direito: Atalhos F1, Notificações & Perfil de Usuário */}
       <div className="flex items-center gap-1.5 sm:gap-3">
-        {/* Indicador Supabase Cloud */}
+        {/* Indicador Supabase Cloud em Tempo Real */}
         <button
           type="button"
           onClick={() => onNavigate('settings_supabase')}
-          className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200 select-none"
-          title="Supabase PostgreSQL Conectado: Clique para gerenciar sincronização e banco de dados"
+          className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer select-none ${
+            supabaseConfig.status === 'syncing'
+              ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+              : supabaseConfig.status === 'connected'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+              : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+          }`}
+          title={
+            supabaseConfig.status === 'syncing'
+              ? 'Sincronizando dados com o Supabase central...'
+              : supabaseConfig.status === 'connected'
+              ? `Supabase Centralizado Conectado: sincronizado às ${supabaseConfig.lastSyncAt ? new Date(supabaseConfig.lastSyncAt).toLocaleTimeString() : 'agora'}`
+              : 'Supabase em espera / reconectando: clique para verificar status do banco'
+          }
         >
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          {supabaseConfig.status === 'syncing' ? (
+            <RefreshCw size={12} className="animate-spin text-blue-600" />
+          ) : (
+            <span
+              className={`w-2 h-2 rounded-full ${
+                supabaseConfig.status === 'connected'
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-amber-500'
+              }`}
+            />
+          )}
           <span className="font-extrabold font-mono text-[11px]">Supabase</span>
-          <span className="text-[10px] text-emerald-600 font-semibold">Online</span>
+          <span className="text-[10px] font-semibold">
+            {supabaseConfig.status === 'syncing'
+              ? 'Sincronizando'
+              : supabaseConfig.status === 'connected'
+              ? 'Online'
+              : 'Aguardando'}
+          </span>
         </button>
 
         {/* Botão Atalhos de Teclado F1 */}
@@ -283,6 +326,43 @@ export const Header: React.FC<HeaderProps> = ({
           onClose={() => setIsChangePassOpen(false)}
           targetUser={currentUser}
         />
+      </div>
+      </div>
+
+      {/* Barra Superior Mobile: Recurso de Seleção de Empresa no Topo da Tela */}
+      <div className="sm:hidden bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white px-3 py-2 border-t border-slate-750 shadow-xs flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 shrink-0 text-slate-300">
+          <Building2 size={16} className="text-emerald-400 shrink-0 animate-pulse" />
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-300">
+            Empresa:
+          </span>
+        </div>
+
+        <div className="flex-1 min-w-0 relative">
+          <select
+            value={currentCompany.id}
+            onChange={handleCompanyChange}
+            aria-label="Selecionar empresa para visualizar os dados"
+            className="w-full bg-slate-800/95 hover:bg-slate-750 text-white text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg border border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer truncate shadow-inner"
+          >
+            {dbState.companies.map((comp) => (
+              <option key={comp.id} value={comp.id} className="bg-slate-900 text-white py-1">
+                {comp.tradeName || comp.name} ({comp.type === 'matriz' ? 'Matriz' : 'Filial'})
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+        </div>
+
+        <span
+          className={`shrink-0 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+            currentCompany.type === 'matriz'
+              ? 'bg-blue-950 text-blue-300 border-blue-600/60'
+              : 'bg-purple-950 text-purple-300 border-purple-600/60'
+          }`}
+        >
+          {currentCompany.type === 'matriz' ? 'Matriz' : 'Filial'}
+        </span>
       </div>
     </header>
   );

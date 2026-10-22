@@ -121,6 +121,14 @@ export interface Product {
   enableAdditionalCosts?: boolean;
   indirectCostPerUnit?: number;
   directLaborCostPerUnit?: number;
+
+  // RECURSO SOLICITADO: EMBALAGEM MASTER
+  isMasterPack?: boolean;
+  masterPackAssociatedProductId?: string;
+  masterPackAssociatedProductCode?: string;
+  masterPackAssociatedProductDescription?: string;
+  masterPackUnits?: number;
+  masterPackPackagingType?: 'caixa' | 'pacote' | 'fardo' | 'display' | 'kit' | 'outro';
 }
 
 export interface StockLocation {
@@ -173,6 +181,10 @@ export interface StockMovement {
   userId: string;
   userName: string;
   notes?: string;
+  isMasterPackMovement?: boolean;
+  masterPackProductId?: string;
+  masterPackProductCode?: string;
+  masterPackUnitsMultiplier?: number;
 }
 
 export interface Customer {
@@ -256,6 +268,10 @@ export interface OrderItem {
   totalPrice: number;
   unitCost: number;
   locationId: string;
+  isMasterPack?: boolean;
+  masterPackUnits?: number;
+  masterPackAssociatedProductId?: string;
+  masterPackAssociatedProductCode?: string;
 }
 
 export interface PaymentInstallment {

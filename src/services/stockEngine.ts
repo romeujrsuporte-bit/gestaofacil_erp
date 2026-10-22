@@ -10,16 +10,42 @@ import {
   StockMovement,
   MovementType,
 } from '../types';
+import { Database } from './db';
 
 export class StockEngine {
   /**
    * Obtém o saldo de um produto em um local específico
+   * Se o produto for uma Embalagem Master, calcula o saldo correspondente a partir do produto unitário associado
    */
   public static getBalance(
     balances: ProductStockBalance[],
     productId: string,
-    locationId: string
+    locationId: string,
+    productsList?: Product[]
   ): ProductStockBalance {
+    const products = productsList || Database?.getState?.()?.products || [];
+    const prod = products.find((p) => p.id === productId);
+
+    // Se for Embalagem Master vinculada a produto unitário
+    if (prod?.isMasterPack && prod.masterPackAssociatedProductId && (prod.masterPackUnits || 1) > 0) {
+      const multiplier = prod.masterPackUnits || 1;
+      const assocBal = this.getBalance(balances, prod.masterPackAssociatedProductId, locationId, products);
+      const directBal = balances.find((b) => b.productId === productId && b.locationId === locationId);
+      const directQty = directBal?.quantity || 0;
+      const directRes = directBal?.reserved || 0;
+
+      const convertedQty = Math.floor(assocBal.quantity / multiplier);
+      const convertedRes = Math.ceil(assocBal.reserved / multiplier);
+
+      return {
+        productId,
+        locationId,
+        quantity: convertedQty + directQty,
+        reserved: convertedRes + directRes,
+        minStock: prod.minStock || 0,
+      };
+    }
+
     const found = balances.find(
       (b) => b.productId === productId && b.locationId === locationId
     );
@@ -35,11 +61,36 @@ export class StockEngine {
 
   /**
    * Obtém a soma total do saldo físico e disponível de um produto em todos os locais
+   * Se for Embalagem Master, reflete proporcionalmente a disponibilidade do produto associado
    */
   public static getTotalProductStock(
     balances: ProductStockBalance[],
-    productId: string
+    productId: string,
+    productsList?: Product[]
   ): { physical: number; reserved: number; available: number } {
+    const products = productsList || Database?.getState?.()?.products || [];
+    const prod = products.find((p) => p.id === productId);
+
+    // Se for Embalagem Master vinculada a produto unitário
+    if (prod?.isMasterPack && prod.masterPackAssociatedProductId && (prod.masterPackUnits || 1) > 0) {
+      const multiplier = prod.masterPackUnits || 1;
+      const assocStock = this.getTotalProductStock(balances, prod.masterPackAssociatedProductId, products);
+      
+      const directBalances = balances.filter((b) => b.productId === productId);
+      const directPhysical = directBalances.reduce((sum, b) => sum + (b.quantity || 0), 0);
+      const directReserved = directBalances.reduce((sum, b) => sum + (b.reserved || 0), 0);
+
+      const convertedPhysical = Math.floor(assocStock.physical / multiplier);
+      const convertedReserved = Math.ceil(assocStock.reserved / multiplier);
+      const convertedAvailable = Math.floor(assocStock.available / multiplier);
+
+      return {
+        physical: convertedPhysical + directPhysical,
+        reserved: convertedReserved + directReserved,
+        available: Math.max(0, convertedAvailable + Math.max(0, directPhysical - directReserved)),
+      };
+    }
+
     const productBalances = balances.filter((b) => b.productId === productId);
     const physical = productBalances.reduce((sum, b) => sum + (b.quantity || 0), 0);
     const reserved = productBalances.reduce((sum, b) => sum + (b.reserved || 0), 0);
@@ -49,19 +100,55 @@ export class StockEngine {
 
   /**
    * Registra uma movimentação e atualiza a matriz de saldos
+   * Se o produto for Embalagem Master, a baixa/entrada é convertida e aplicada no produto unitário associado
    */
   public static applyMovement(
     currentBalances: ProductStockBalance[],
     movement: Omit<StockMovement, 'id'>,
-    options?: { allowNegativeStock?: boolean }
+    options?: { allowNegativeStock?: boolean; products?: Product[] }
   ): {
     updatedBalances: ProductStockBalance[];
     createdMovement: StockMovement;
   } {
+    const products = options?.products || Database?.getState?.()?.products || [];
+    const masterProduct = products.find((p) => p.id === movement.productId);
+    const isMaster = !!(
+      masterProduct?.isMasterPack &&
+      masterProduct.masterPackAssociatedProductId &&
+      (masterProduct.masterPackUnits || 1) > 0
+    );
+
+    const multiplier = isMaster ? (masterProduct!.masterPackUnits || 1) : 1;
+    const targetProductId = isMaster ? masterProduct!.masterPackAssociatedProductId! : movement.productId;
+    const associatedProduct = isMaster ? products.find((p) => p.id === targetProductId) : null;
+    const effectiveQuantity = movement.quantity * multiplier;
+
     const movementId = 'MOV-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    
+    // Anotação clara sobre a Embalagem Master
+    let movementNotes = movement.notes || '';
+    if (isMaster) {
+      const packLabel = masterProduct!.unit || 'CX';
+      const unitLabel = associatedProduct?.unit || 'UN';
+      const packName = masterProduct!.description;
+      const assocName = associatedProduct?.description || masterProduct!.masterPackAssociatedProductDescription || '';
+      movementNotes = `${movementNotes ? movementNotes + ' • ' : ''}[Embalagem Master: ${movement.quantity} ${packLabel} de "${packName}" (${multiplier} un/emb = Baixa de ${effectiveQuantity} ${unitLabel} de "${assocName}")]`;
+    }
+
     const createdMovement: StockMovement = {
       id: movementId,
       ...movement,
+      productId: isMaster ? targetProductId : movement.productId,
+      productCode: isMaster ? (associatedProduct?.code || movement.productCode) : movement.productCode,
+      productDescription: isMaster ? (associatedProduct?.description || movement.productDescription) : movement.productDescription,
+      quantity: effectiveQuantity,
+      unitCost: isMaster ? (associatedProduct?.costPrice || (movement.unitCost / multiplier)) : movement.unitCost,
+      totalCost: isMaster ? ((associatedProduct?.costPrice || (movement.unitCost / multiplier)) * effectiveQuantity) : movement.totalCost,
+      notes: movementNotes,
+      isMasterPackMovement: isMaster,
+      masterPackProductId: isMaster ? masterProduct!.id : undefined,
+      masterPackProductCode: isMaster ? masterProduct!.code : undefined,
+      masterPackUnitsMultiplier: isMaster ? multiplier : undefined,
     };
 
     let updatedBalances = [...currentBalances];
@@ -74,6 +161,12 @@ export class StockEngine {
         const current = updatedBalances[idx];
         const newQty = (current.quantity || 0) + deltaQty;
         if (newQty < 0 && !options?.allowNegativeStock) {
+          if (isMaster) {
+            const availPacks = Math.floor(current.quantity / multiplier);
+            throw new Error(
+              `Estoque insuficiente para a Embalagem Master "${masterProduct?.description}". Saldo atual do produto unitário associado "${associatedProduct?.description}": ${current.quantity} ${associatedProduct?.unit || 'UN'} (equivale a ${availPacks} caixas/pacotes), solicitado: ${movement.quantity} (${effectiveQuantity} ${associatedProduct?.unit || 'UN'}).`
+            );
+          }
           throw new Error(
             `Estoque insuficiente no local selecionado. Saldo atual: ${current.quantity}, solicitado: ${Math.abs(deltaQty)}`
           );
@@ -84,6 +177,11 @@ export class StockEngine {
         };
       } else {
         if (deltaQty < 0 && !options?.allowNegativeStock) {
+          if (isMaster) {
+            throw new Error(
+              `Estoque insuficiente. O produto unitário associado "${associatedProduct?.description}" possui saldo 0 no local selecionado.`
+            );
+          }
           throw new Error(
             `Estoque insuficiente no local. Saldo atual: 0, solicitado: ${Math.abs(deltaQty)}`
           );
@@ -104,19 +202,19 @@ export class StockEngine {
       case 'entrada_producao':
       case 'devolucao':
       case 'transferencia_entrada':
-        updateItemBalance(movement.productId, movement.locationId, movement.quantity);
+        updateItemBalance(targetProductId, movement.locationId, effectiveQuantity);
         break;
 
       case 'saida_venda':
       case 'consumo_producao':
       case 'perda_avaria':
       case 'transferencia_saida':
-        updateItemBalance(movement.productId, movement.locationId, -movement.quantity);
+        updateItemBalance(targetProductId, movement.locationId, -effectiveQuantity);
         break;
 
       case 'ajuste_inventario':
         // No ajuste, a quantidade do movimento é a diferença
-        updateItemBalance(movement.productId, movement.locationId, movement.quantity);
+        updateItemBalance(targetProductId, movement.locationId, effectiveQuantity);
         break;
     }
 

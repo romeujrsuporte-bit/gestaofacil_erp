@@ -20,7 +20,8 @@ import {
   Clock,
   Layers,
   ArrowRight,
-  Barcode
+  Barcode,
+  Boxes
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { Product, Customer, Order, OrderItem } from '../../types';
@@ -194,6 +195,10 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
         totalPrice: product.salePrice * quantityToAdd,
         unitCost: product.costPrice,
         locationId: selectedLocationId,
+        isMasterPack: product.isMasterPack,
+        masterPackUnits: product.masterPackUnits,
+        masterPackAssociatedProductId: product.masterPackAssociatedProductId,
+        masterPackAssociatedProductCode: product.masterPackAssociatedProductCode,
       };
       setCart([newItem, ...cart]);
     }
@@ -686,6 +691,12 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
                           <span className="text-xs font-bold text-slate-800 truncate">
                             {p.description}
                           </span>
+                          {p.isMasterPack && (
+                            <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-900 font-extrabold px-1.5 py-0.2 rounded border border-amber-300">
+                              <Boxes size={10} className="text-amber-700" />
+                              Master ({p.masterPackUnits} un/{p.unit})
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
                           <span>Preço: <strong className="text-slate-700">{formatCurrency(p.salePrice)}</strong></span>
@@ -767,7 +778,15 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
             {cart.map((item) => (
               <div key={item.id} className="py-2 flex items-center justify-between gap-2 text-xs">
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-900 truncate">{item.description}</div>
+                  <div className="font-bold text-slate-900 truncate flex items-center gap-1.5 flex-wrap">
+                    <span>{item.description}</span>
+                    {item.isMasterPack && (
+                      <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-900 font-extrabold px-1.5 py-0.2 rounded border border-amber-300">
+                        <Boxes size={10} className="text-amber-700" />
+                        Master ({item.masterPackUnits} un/{item.unit})
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-slate-500 flex items-center gap-2">
                     <span>
                       {formatCurrency(item.unitPrice)} x {item.quantity} {item.unit}

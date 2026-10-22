@@ -1,8 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database, DatabaseState } from './db';
 
-export const DEFAULT_SUPABASE_URL = 'https://qtnlzojhksooztmsdoen.supabase.co';
-export const DEFAULT_SUPABASE_KEY = 'sb_publishable_UaJHH_uS1YEm4aM6bVI3fw_3FiZc3YL';
+export const DEFAULT_SUPABASE_URL = 'https://hgjebnvzfstddfihblhw.supabase.co';
+export const DEFAULT_SUPABASE_KEY = 'sb_publishable_xAWxHwrjMTPMHbGmF256pA_n-J3visx';
 
 export interface SupabaseConfig {
   url: string;
@@ -10,7 +10,7 @@ export interface SupabaseConfig {
   autoSync: boolean;
   syncIntervalMinutes: number;
   lastSyncAt: string | null;
-  status: 'connected' | 'disconnected' | 'error' | 'testing';
+  status: 'connected' | 'disconnected' | 'error' | 'testing' | 'syncing';
   lastError: string | null;
 }
 
@@ -23,6 +23,25 @@ export interface TableAuditItem {
   module: string;
   exists: boolean;
   count: number;
+}
+
+export interface DatabaseCheckoutResult {
+  success: boolean;
+  timestamp: string;
+  projectName: string;
+  projectId: string;
+  url: string;
+  publishableKey: string;
+  latencyMs: number;
+  connectionStatus: 'connected' | 'error';
+  tablesAudit: TableAuditItem[];
+  tablesTotal: number;
+  tablesFoundCount: number;
+  tablesMissingCount: number;
+  universalSyncStatus: 'synced' | 'pending_schema' | 'error';
+  message: string;
+  sqlConsoleUrl: string;
+  sqlSchema: string;
 }
 
 export interface ConnectionTestResult {
@@ -58,6 +77,11 @@ export class SupabaseService {
   private static config: SupabaseConfig = this.loadConfig();
   private static listeners: Array<(config: SupabaseConfig) => void> = [];
   private static autoSyncTimer: any = null;
+  private static syncDebounceTimer: any = null;
+  private static realtimeChannel: any = null;
+  private static isInitialized = false;
+  private static isSyncingInProgress = false;
+  private static lastLocalSyncTimestamp: string | null = null;
 
   private static sanitizeUrl(url: string): string {
     if (!url) return DEFAULT_SUPABASE_URL;
@@ -75,11 +99,17 @@ export class SupabaseService {
         const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
+          // Migração automática caso o usuário tenha armazenado o projeto anterior padrão
+          if (!parsed.url || parsed.url.includes('qtnlzojhksooztmsdoen') || parsed.anonKey?.includes('UaJHH_uS1YEm4aM6bVI3fw')) {
+            parsed.url = DEFAULT_SUPABASE_URL;
+            parsed.anonKey = DEFAULT_SUPABASE_KEY;
+            localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(parsed));
+          }
           return {
             url: parsed.url || DEFAULT_SUPABASE_URL,
             anonKey: parsed.anonKey || DEFAULT_SUPABASE_KEY,
-            autoSync: parsed.autoSync ?? false,
-            syncIntervalMinutes: parsed.syncIntervalMinutes || 10,
+            autoSync: parsed.autoSync ?? true,
+            syncIntervalMinutes: parsed.syncIntervalMinutes || 1,
             lastSyncAt: parsed.lastSyncAt || null,
             status: 'disconnected',
             lastError: null,
@@ -96,8 +126,8 @@ export class SupabaseService {
     return {
       url: envUrl || DEFAULT_SUPABASE_URL,
       anonKey: envKey || DEFAULT_SUPABASE_KEY,
-      autoSync: false,
-      syncIntervalMinutes: 10,
+      autoSync: true,
+      syncIntervalMinutes: 1,
       lastSyncAt: null,
       status: 'disconnected',
       lastError: null,
@@ -155,7 +185,7 @@ export class SupabaseService {
   public static extractProjectId(url: string): string {
     const clean = this.sanitizeUrl(url);
     const match = clean.match(/https?:\/\/([^.]+)\.supabase\.co/);
-    return match ? match[1] : 'qtnlzojhksooztmsdoen';
+    return match ? match[1] : 'hgjebnvzfstddfihblhw';
   }
 
   /**
@@ -274,6 +304,64 @@ export class SupabaseService {
   }
 
   /**
+   * Realiza o checkout completo com o banco de dados Supabase:
+   * Validação de conexão, auditoria de tabelas, sincronização de dados e verificação de schema.
+   */
+  public static async checkoutDatabase(): Promise<DatabaseCheckoutResult> {
+    const start = performance.now();
+    const testResult = await this.testConnection();
+    const latencyMs = Math.round(performance.now() - start);
+    const projectId = this.extractProjectId(this.config.url || DEFAULT_SUPABASE_URL);
+    const sqlConsoleUrl = `https://supabase.com/dashboard/project/${projectId}/sql`;
+    const sqlSchema = this.generateSqlSchema();
+
+    let universalSyncStatus: 'synced' | 'pending_schema' | 'error' = 'pending_schema';
+
+    const omniTable = testResult.tablesAudit.find((t) => t.id === 'omni_erp_sync');
+    if (omniTable && omniTable.exists) {
+      try {
+        const syncRes = await this.syncToSupabase();
+        universalSyncStatus = syncRes.success ? 'synced' : 'error';
+      } catch {
+        universalSyncStatus = 'error';
+      }
+    } else {
+      universalSyncStatus = 'pending_schema';
+    }
+
+    const tablesFoundCount = testResult.existingTables.length;
+    const tablesMissingCount = testResult.missingTables.length;
+
+    let message = '';
+    if (!testResult.success) {
+      message = `Falha na conexão com o Supabase: ${testResult.message}`;
+    } else if (tablesMissingCount > 0) {
+      message = `Conexão bem-sucedida (${latencyMs}ms). Projeto: ${projectId}. ${tablesFoundCount} de ${ERP_SUPABASE_TABLES.length} tabelas encontradas. ${tablesMissingCount} tabelas prontas para inicialização no SQL Editor.`;
+    } else {
+      message = `Checkout 100% concluído! Todas as ${ERP_SUPABASE_TABLES.length} tabelas estão ativas e sincronizadas no Supabase (${projectId}).`;
+    }
+
+    return {
+      success: testResult.success,
+      timestamp: new Date().toISOString(),
+      projectName: 'gestaofacil_erp-netlify',
+      projectId,
+      url: this.config.url,
+      publishableKey: this.config.anonKey,
+      latencyMs,
+      connectionStatus: testResult.success ? 'connected' : 'error',
+      tablesAudit: testResult.tablesAudit,
+      tablesTotal: ERP_SUPABASE_TABLES.length,
+      tablesFoundCount,
+      tablesMissingCount,
+      universalSyncStatus,
+      message,
+      sqlConsoleUrl,
+      sqlSchema,
+    };
+  }
+
+  /**
    * Sincroniza o estado de toda a aplicação para o Supabase
    */
   public static async syncToSupabase(customState?: DatabaseState): Promise<{
@@ -282,6 +370,20 @@ export class SupabaseService {
     syncedTables: string[];
     message: string;
   }> {
+    if (this.isSyncingInProgress) {
+      this.queueSync(800);
+      return {
+        success: true,
+        recordsCount: 0,
+        syncedTables: [],
+        message: 'Sincronização já em andamento, nova rodada agendada.',
+      };
+    }
+
+    this.isSyncingInProgress = true;
+    this.config.status = 'syncing';
+    this.notify();
+
     const client = this.getClient();
     const state = customState || Database.getState();
     const currentCompany = Database.getCurrentCompany();
@@ -650,6 +752,9 @@ export class SupabaseService {
         }
       }
 
+      this.lastLocalSyncTimestamp = nowIso;
+      Database.setLastRemoteSyncTime(nowIso);
+
       this.saveConfig({
         lastSyncAt: nowIso,
         status: 'connected',
@@ -681,6 +786,8 @@ export class SupabaseService {
         syncedTables,
         message: err?.message || 'Falha ao sincronizar dados com o Supabase.',
       };
+    } finally {
+      this.isSyncingInProgress = false;
     }
   }
 
@@ -718,23 +825,262 @@ export class SupabaseService {
           };
         }
 
-        Database.importDatabaseJSON(JSON.stringify(anyData.state_json));
+        Database.applyRemoteState(anyData.state_json, anyData.updated_at || anyData.last_sync_at);
+        this.lastLocalSyncTimestamp = anyData.updated_at || anyData.last_sync_at;
         return {
           success: true,
-          message: `Dados restaurados com sucesso do Supabase (Sincronizado em ${new Date(anyData.last_sync_at).toLocaleString()})!`,
+          message: `Dados restaurados com sucesso do Supabase (Sincronizado em ${new Date(anyData.updated_at || anyData.last_sync_at).toLocaleString()})!`,
         };
       }
 
-      Database.importDatabaseJSON(JSON.stringify(data.state_json));
+      Database.applyRemoteState(data.state_json, data.updated_at || data.last_sync_at);
+      this.lastLocalSyncTimestamp = data.updated_at || data.last_sync_at;
       return {
         success: true,
-        message: `Dados restaurados com sucesso do Supabase (Sincronizado em ${new Date(data.last_sync_at).toLocaleString()})!`,
+        message: `Dados restaurados com sucesso do Supabase (Sincronizado em ${new Date(data.updated_at || data.last_sync_at).toLocaleString()})!`,
       };
     } catch (err: any) {
       return {
         success: false,
         message: err?.message || 'Erro ao restaurar dados do Supabase.',
       };
+    }
+  }
+
+  /**
+   * Inicializa o mecanismo de sincronização centralizada em tempo real:
+   * 1. Conecta o listener do Database para sincronização automática em toda alteração (com debounce);
+   * 2. Puxa os dados atualizados do Supabase no arranque (ou envia os locais se o banco nuvem estiver vazio);
+   * 3. Conecta o canal Realtime do Supabase para escutar alterações de outros computadores;
+   * 4. Escuta eventos de visibilidade da janela (focus / visibilitychange) para atualização imediata ao alternar abas;
+   * 5. Mantém um heartbeat leve para garantir consistência contínua.
+   */
+  public static init(): () => void {
+    if (this.isInitialized) return () => {};
+    this.isInitialized = true;
+
+    // 1. Escuta alterações locais e sincroniza em fila (debounce)
+    const unsubPersist = Database.onPersist(() => {
+      if (this.config.autoSync) {
+        this.queueSync(500);
+      }
+    });
+
+    // 2. Carga inicial do Supabase
+    this.pullAndReconcile().catch((err) => {
+      console.warn('Sincronização inicial com Supabase em segundo plano:', err);
+    });
+
+    // 3. Canal Realtime do Supabase
+    this.startRealtimeSubscription();
+
+    // 4. Detecção de foco na aba/janela para atualização imediata
+    const handleFocus = () => {
+      this.checkRemoteUpdatesIfNewer().catch(() => {});
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          handleFocus();
+        }
+      });
+    }
+
+    // 5. Polling periódico de backup
+    this.setupAutoSync();
+
+    return () => {
+      unsubPersist();
+      if (this.realtimeChannel) {
+        try {
+          const client = this.getClient();
+          client.removeChannel(this.realtimeChannel);
+        } catch {
+          // ignore
+        }
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+      }
+      this.isInitialized = false;
+    };
+  }
+
+  /**
+   * Enfileira uma sincronização com debounce para agrupar operações rápidas
+   */
+  public static queueSync(delayMs = 500) {
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+    }
+    this.config.status = 'syncing';
+    this.notify();
+
+    this.syncDebounceTimer = setTimeout(() => {
+      this.syncDebounceTimer = null;
+      this.syncToSupabase().catch((err) => {
+        console.error('Erro na sincronização em fila com Supabase:', err);
+      });
+    }, delayMs);
+  }
+
+  /**
+   * Puxa os dados mais recentes do Supabase e reconcilia com os dados locais
+   */
+  public static async pullAndReconcile(forceOverwrite = false): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const client = this.getClient();
+    const currentCompany = Database.getCurrentCompany();
+
+    try {
+      this.config.status = 'syncing';
+      this.notify();
+
+      const { data, error } = await client
+        .from('omni_erp_sync')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+          this.config.status = 'error';
+          this.config.lastError = 'Tabela omni_erp_sync não encontrada no Supabase. Execute o script SQL nas Configurações.';
+          this.notify();
+          return { success: false, message: this.config.lastError };
+        }
+        throw error;
+      }
+
+      // Se a tabela do Supabase estiver vazia, sincroniza a base local atual para a nuvem
+      if (!data || !data.state_json) {
+        console.log('Supabase vazio. Inicializando banco na nuvem com dados locais...');
+        const syncRes = await this.syncToSupabase();
+        return {
+          success: syncRes.success,
+          message: syncRes.success
+            ? 'Banco do Supabase inicializado com os dados locais com sucesso!'
+            : syncRes.message,
+        };
+      }
+
+      const remoteTimestamp = data.updated_at || data.last_sync_at;
+      const remoteState = data.state_json as DatabaseState;
+
+      if (forceOverwrite) {
+        Database.applyRemoteState(remoteState, remoteTimestamp);
+      } else {
+        const { localUnsyncedChanges } = Database.reconcileWithRemote(remoteState, remoteTimestamp);
+        if (localUnsyncedChanges) {
+          // Se existiam registros novos criados localmente, sobe o resultado mesclado para a nuvem
+          this.queueSync(800);
+        }
+      }
+
+      this.lastLocalSyncTimestamp = remoteTimestamp;
+      this.saveConfig({
+        status: 'connected',
+        lastSyncAt: remoteTimestamp,
+        lastError: null,
+      });
+
+      return {
+        success: true,
+        message: `Dados sincronizados com o Supabase com sucesso (${new Date(remoteTimestamp).toLocaleTimeString()})!`,
+      };
+    } catch (err: any) {
+      console.warn('Falha ao reconciliar com Supabase:', err);
+      this.saveConfig({
+        status: 'error',
+        lastError: err?.message || 'Falha ao sincronizar com Supabase',
+      });
+      return {
+        success: false,
+        message: err?.message || 'Falha ao sincronizar com Supabase.',
+      };
+    }
+  }
+
+  /**
+   * Assina o canal Realtime do Supabase para receber notificações imediatas
+   * de inserções e atualizações realizadas por outros computadores.
+   */
+  public static startRealtimeSubscription() {
+    try {
+      const client = this.getClient();
+      if (this.realtimeChannel) {
+        try {
+          client.removeChannel(this.realtimeChannel);
+        } catch {
+          // ignore
+        }
+      }
+
+      this.realtimeChannel = client
+        .channel('omni_erp_realtime_channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'omni_erp_sync' },
+          (payload: any) => {
+            const newRecord = payload.new;
+            if (newRecord && newRecord.updated_at) {
+              // Evita eco da nossa própria sincronização recente
+              if (newRecord.updated_at !== this.lastLocalSyncTimestamp) {
+                console.log('⚡ Atualização em tempo real recebida do Supabase de outro dispositivo!');
+                if (newRecord.state_json) {
+                  Database.reconcileWithRemote(newRecord.state_json, newRecord.updated_at);
+                  this.lastLocalSyncTimestamp = newRecord.updated_at;
+                  this.saveConfig({
+                    status: 'connected',
+                    lastSyncAt: newRecord.updated_at,
+                    lastError: null,
+                  });
+                }
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Canal Realtime do Supabase conectado com sucesso.');
+          }
+        });
+    } catch (err) {
+      console.warn('Erro ao configurar canal Realtime do Supabase:', err);
+    }
+  }
+
+  /**
+   * Verificação leve de novas versões gravadas no Supabase (utilizada ao focar na aba ou em polling)
+   */
+  public static async checkRemoteUpdatesIfNewer() {
+    if (this.isSyncingInProgress) return;
+    try {
+      const client = this.getClient();
+      const currentCompany = Database.getCurrentCompany();
+
+      const { data, error } = await client
+        .from('omni_erp_sync')
+        .select('updated_at')
+        .eq('company_id', currentCompany.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data && data.updated_at) {
+        if (data.updated_at !== this.lastLocalSyncTimestamp) {
+          console.log('Detectada nova versão no Supabase. Puxando dados atualizados...');
+          await this.pullAndReconcile();
+        }
+      }
+    } catch {
+      // Falha silenciosa em checagem de fundo
     }
   }
 
@@ -747,7 +1093,7 @@ export class SupabaseService {
     if (this.config.autoSync && this.config.syncIntervalMinutes > 0) {
       const ms = this.config.syncIntervalMinutes * 60 * 1000;
       this.autoSyncTimer = setInterval(() => {
-        this.syncToSupabase().catch((e) => console.error('Erro no auto-sync Supabase:', e));
+        this.checkRemoteUpdatesIfNewer().catch((e) => console.error('Erro no auto-sync Supabase:', e));
       }, ms);
     }
   }
@@ -756,10 +1102,12 @@ export class SupabaseService {
    * Gera o Script SQL DDL COMPLETO E DEFINITIVO para cobrir 100% dos módulos do ERP
    */
   public static generateSqlSchema(): string {
+    const projectId = this.extractProjectId(this.config.url || DEFAULT_SUPABASE_URL);
     return `-- =========================================================================
 -- GESTAOFACIL ERP - SCRIPT COMPLETO DE CRIAÇÃO DE TABELAS PARA SUPABASE
+-- Projeto: gestaofacil_erp-netlify (${projectId})
 -- Execute este script no SQL Editor do seu projeto Supabase:
--- https://supabase.com/dashboard/project/qtnlzojhksooztmsdoen/sql
+-- https://supabase.com/dashboard/project/${projectId}/sql
 -- =========================================================================
 
 -- 1. BACKUP & SINCRONIZAÇÃO UNIVERSAL DO ERP (JSONB COMPLETO)
@@ -1162,9 +1510,15 @@ drop policy if exists "accounts_payable_insert" on public.accounts_payable;
 create policy "accounts_payable_insert" on public.accounts_payable for insert to anon with check (company_id is not null);
 drop policy if exists "accounts_payable_update" on public.accounts_payable for update to anon using (company_id is not null);
 
--- NOTA DE SEGURANÇA: Políticas de DELETE foram intencionalmente omitidas para o papel 'anon'.
--- Isso impede que scripts ou invasores públicos executem "DELETE FROM customers" ou apaguem dados.
--- Exclusões no ERP devem ser feitas via soft-delete (status = 'inativo'/'cancelado') ou pelo dashboard Supabase com permissões de administrador.
+-- 4. HABILITAÇÃO DO REALTIME PARA ATUALIZAÇÃO AUTOMÁTICA EM TEMPO REAL ENTRE COMPUTADORES
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'omni_erp_sync') then
+    alter publication supabase_realtime add table public.omni_erp_sync;
+  end if;
+exception
+  when others then null;
+end $$;
 `;
   }
 
@@ -1173,13 +1527,118 @@ drop policy if exists "accounts_payable_update" on public.accounts_payable for u
    * já criadas pelo usuário (omni_erp_sync, customers, products, delivery_routes, delivery_manifests)
    */
   public static generateHardenedRlsFixForFiveTables(): string {
+    const projectId = this.extractProjectId(this.config.url || DEFAULT_SUPABASE_URL);
     return `-- =========================================================================
--- GESTAOFACIL ERP - CORREÇÃO DE VULNERABILIDADES RLS (5 TABELAS ATUAIS)
--- Execute este script no SQL Editor do Supabase para blindar suas tabelas:
--- https://supabase.com/dashboard/project/qtnlzojhksooztmsdoen/sql
+-- GESTAOFACIL ERP - CORREÇÃO DE VULNERABILIDADES RLS (5 TABELAS)
+-- Projeto: gestaofacil_erp-netlify (${projectId})
+-- Execute este script no SQL Editor do Supabase:
+-- https://supabase.com/dashboard/project/${projectId}/sql
 -- =========================================================================
 
--- 1. Habilita RLS nas 5 tabelas existentes
+-- 1. Garante que as 5 tabelas existam antes de aplicar RLS e políticas de segurança
+create table if not exists public.omni_erp_sync (
+  id text primary key,
+  company_id text not null,
+  company_name text,
+  company_cnpj text,
+  last_sync_at timestamptz not null default now(),
+  erp_version text default '1.0.0',
+  total_customers integer default 0,
+  total_products integer default 0,
+  total_orders integer default 0,
+  total_manifests integer default 0,
+  total_routes integer default 0,
+  state_json jsonb not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.customers (
+  id text primary key,
+  company_id text not null,
+  code text not null,
+  name text not null,
+  trade_name text,
+  type text default 'PJ',
+  cpf_cnpj text not null,
+  phone text,
+  whatsapp text,
+  email text,
+  street text,
+  number text,
+  neighborhood text,
+  city text,
+  state text,
+  market_area text,
+  seller_name text,
+  delivery_route_id text,
+  delivery_route_name text,
+  credit_limit numeric(12,2) default 0,
+  status text default 'ativo',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.products (
+  id text primary key,
+  company_id text not null,
+  code text not null,
+  barcode text,
+  name text not null,
+  category text default 'Geral',
+  unit text default 'UN',
+  cost_price numeric(12,2) default 0,
+  sale_price numeric(12,2) default 0,
+  min_stock numeric(12,2) default 0,
+  is_produced boolean default false,
+  active boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.delivery_routes (
+  id text primary key,
+  company_id text not null,
+  code text not null,
+  name text not null,
+  description text,
+  active boolean default true,
+  color text default 'blue',
+  cities text[] default '{}',
+  neighborhoods text[] default '{}',
+  market_areas text[] default '{}',
+  seller_names text[] default '{}',
+  estimated_delivery_window text,
+  vehicle_type text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.delivery_manifests (
+  id text primary key,
+  number text not null,
+  company_id text not null,
+  date timestamptz default now(),
+  departure_date date not null,
+  route_id text not null,
+  route_name text not null,
+  driver_name text not null,
+  driver_phone text,
+  vehicle_plate text not null,
+  vehicle_model text,
+  status text default 'planejado',
+  total_orders integer default 0,
+  total_delivered integer default 0,
+  total_pending integer default 0,
+  total_value numeric(12,2) default 0,
+  total_amount_to_collect numeric(12,2) default 0,
+  total_volumes integer default 0,
+  orders_json jsonb default '[]'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- 2. Habilita RLS nas tabelas
 alter table public.omni_erp_sync enable row level security;
 alter table public.customers enable row level security;
 alter table public.products enable row level security;
@@ -1307,6 +1766,16 @@ create policy "delivery_manifests_update" on public.delivery_manifests
 -- VULNERABILIDADE CORRIGIDA COM SUCESSO:
 -- Sem permissão de DELETE público para anon.
 -- Acesso condicionado à validação de company_id obrigatório e integridade de dados.
+
+-- 8. Habilita Realtime na publicação padrão do Supabase
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'omni_erp_sync') then
+    alter publication supabase_realtime add table public.omni_erp_sync;
+  end if;
+exception
+  when others then null;
+end $$;
 `;
   }
 
@@ -1315,10 +1784,12 @@ create policy "delivery_manifests_update" on public.delivery_manifests
    * que ainda não constavam no script inicial de 5 tabelas
    */
   public static generateMissingTablesSql(): string {
+    const projectId = this.extractProjectId(this.config.url || DEFAULT_SUPABASE_URL);
     return `-- =========================================================================
 -- GESTAOFACIL ERP - TABELAS COMPLEMENTARES FALTANTES DO SISTEMA
+-- Projeto: gestaofacil_erp-netlify (${projectId})
 -- Execute este script para adicionar os módulos de Vendas, Estoque, Financeiro e Produção
--- https://supabase.com/dashboard/project/qtnlzojhksooztmsdoen/sql
+-- https://supabase.com/dashboard/project/${projectId}/sql
 -- =========================================================================
 
 -- 1. PEDIDOS DE VENDA, ORÇAMENTOS, PDV & VENDAS EXTERNAS (MUITO IMPORTANTE!)

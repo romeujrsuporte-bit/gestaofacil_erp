@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  Building2,
   Home,
   ShoppingCart,
   Smartphone,
@@ -327,6 +328,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               ✕
             </button>
+          </div>
+
+          {/* Seletor Rápido de Empresa no Menu Mobile */}
+          <div className="p-3 lg:hidden border-b border-zinc-800/80 bg-zinc-900/60">
+            <div className="flex items-center gap-1.5 text-zinc-300 mb-1.5">
+              <Building2 size={15} className="text-emerald-400" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                Empresa Ativa:
+              </span>
+            </div>
+            <select
+              value={Database.getCurrentCompany().id}
+              onChange={(e) => {
+                const newCompanyId = e.target.value;
+                Database.setCurrentCompany(newCompanyId);
+                const comp = dbState.companies.find((c) => c.id === newCompanyId);
+                const compName = comp ? (comp.tradeName || comp.name) : newCompanyId;
+                Database.addAuditLog(
+                  'TROCA_EMPRESA',
+                  'SISTEMA',
+                  newCompanyId,
+                  `Usuário alternou empresa no menu mobile para: ${compName}`
+                );
+                toast.success(`Empresa alterada para: ${compName}`, 'Empresa Selecionada');
+              }}
+              className="w-full bg-zinc-950 border border-zinc-700/80 text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-hidden focus:border-emerald-500 cursor-pointer"
+            >
+              {dbState.companies.map((comp) => (
+                <option key={comp.id} value={comp.id}>
+                  {comp.tradeName || comp.name} ({comp.type === 'matriz' ? 'Matriz' : 'Filial'})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Botão de Toggle Minimizar Desktop */}

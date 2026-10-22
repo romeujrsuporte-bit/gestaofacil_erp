@@ -286,7 +286,14 @@ export const StockLocationsView: React.FC<{ initialSubTab?: 'locais' | 'transfer
   const filteredMovements = dbState.stockMovements.filter((m) => {
     if (m.companyId !== currentCompany.id) return false;
     if (movFilterType !== 'todos' && m.type !== movFilterType) return false;
-    if (movSearchProd && !m.productDescription.toLowerCase().includes(movSearchProd.toLowerCase()) && !m.productCode.toLowerCase().includes(movSearchProd.toLowerCase())) return false;
+    if (
+      movSearchProd &&
+      !m.productDescription.toLowerCase().includes(movSearchProd.toLowerCase()) &&
+      !m.productCode.toLowerCase().includes(movSearchProd.toLowerCase()) &&
+      !(m.masterPackProductCode && m.masterPackProductCode.toLowerCase().includes(movSearchProd.toLowerCase())) &&
+      !(m.notes && m.notes.toLowerCase().includes(movSearchProd.toLowerCase()))
+    )
+      return false;
     return true;
   });
 
@@ -715,7 +722,17 @@ export const StockLocationsView: React.FC<{ initialSubTab?: 'locais' | 'transfer
                         {new Date(m.date).toLocaleString('pt-BR')}
                       </td>
                       <td className="p-3 font-semibold text-slate-800">
-                        {m.productCode} - {m.productDescription}
+                        <div>{m.productCode} - {m.productDescription}</div>
+                        {m.isMasterPackMovement && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-300 mt-0.5">
+                            Embalagem Master ({m.masterPackUnitsMultiplier} un/cx)
+                          </span>
+                        )}
+                        {m.notes && (
+                          <div className="text-[10px] text-slate-500 font-normal mt-0.5 max-w-md line-clamp-2">
+                            {m.notes}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${

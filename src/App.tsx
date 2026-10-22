@@ -24,6 +24,7 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { LoginView } from './components/auth/LoginView';
 import { OrderItem } from './types';
 import { Database } from './services/db';
+import { SupabaseService } from './services/supabaseService';
 import { toast } from './services/toast';
 
 export default function App() {
@@ -39,6 +40,7 @@ export default function App() {
     return localStorage.getItem('omni_hide_dashboard_kpis') === 'true';
   });
   const [, setDbVersion] = useState(0);
+  const currentCompany = Database.getCurrentCompany();
 
   // Carrinho do PDV Balcão mantido no nível superior para detectar venda em andamento
   const [posCart, setPosCart] = useState<OrderItem[]>([]);
@@ -128,13 +130,21 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Carregar dados iniciais e escutar mudanças
+    // Carregar dados locais imediatos e escutar mudanças reativas
     Database.load();
     const unsubscribe = Database.subscribe(() => {
       setDbVersion((v) => v + 1);
       setIsAuthenticated(Database.isSessionAuthenticated());
     });
-    return unsubscribe;
+
+    // Inicialização da sincronização centralizada em tempo real com o Supabase
+    // Conecta Realtime, reconcilia dados e sincroniza alterações entre todos os computadores
+    const cleanupSupabase = SupabaseService.init();
+
+    return () => {
+      unsubscribe();
+      cleanupSupabase();
+    };
   }, []);
 
   // SISTEMA DE ATALHOS GLOBAIS DE TECLADO
@@ -443,6 +453,7 @@ export default function App() {
 
         {/* Área Central de Visualização dos Módulos */}
         <main
+          key={`main-content-${currentModule}-${currentCompany.id}`}
           className={`flex-1 w-full mx-auto ${
             currentModule === 'pos'
               ? 'p-2 sm:p-2.5 max-w-[1700px] h-full overflow-hidden flex flex-col min-h-0'

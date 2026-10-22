@@ -22,6 +22,7 @@ import { A4ReportsPreviewModal, A4ReportType } from './A4ReportsPreviewModal';
 export const ReportsView: React.FC = () => {
   const dbState = Database.getState();
   const currentCompany = Database.getCurrentCompany();
+  const canViewTotalRevenue = Database.canCurrentUserView('totalRevenue');
 
   const [reportTab, setReportTab] = useState<'vendas' | 'estoque' | 'financeiro' | 'producao'>('vendas');
   const [a4ReportModal, setA4ReportModal] = useState<A4ReportType | null>(null);
@@ -140,7 +141,7 @@ export const ReportsView: React.FC = () => {
                 Faturamento Total de Vendas
               </span>
               <div className="text-2xl font-extrabold text-slate-900 mt-1">
-                {formatCurrency(totalRevenue)}
+                {canViewTotalRevenue ? formatCurrency(totalRevenue) : '•••• (Oculto)'}
               </div>
               <span className="text-[11px] text-slate-500 mt-0.5 block">{totalSalesCount} pedidos concluídos</span>
             </div>
@@ -150,7 +151,7 @@ export const ReportsView: React.FC = () => {
                 Ticket Médio por Venda
               </span>
               <div className="text-2xl font-extrabold text-indigo-600 mt-1">
-                {formatCurrency(avgTicket)}
+                {canViewTotalRevenue ? formatCurrency(avgTicket) : '••••'}
               </div>
               <span className="text-[11px] text-slate-500 mt-0.5 block">Média por atendimento</span>
             </div>
@@ -160,10 +161,10 @@ export const ReportsView: React.FC = () => {
                 PDV Balcão vs Mobile
               </span>
               <div className="text-sm font-extrabold text-slate-800 mt-1">
-                Balcão: {formatCurrency(pdvRevenue)}
+                Balcão: {canViewTotalRevenue ? formatCurrency(pdvRevenue) : '••••'}
               </div>
               <div className="text-xs text-indigo-600 font-semibold mt-0.5">
-                Venda Celular: {formatCurrency(mobileRevenue)}
+                Venda Celular: {canViewTotalRevenue ? formatCurrency(mobileRevenue) : '••••'}
               </div>
             </div>
 
@@ -172,7 +173,7 @@ export const ReportsView: React.FC = () => {
                 Total Descontos Concedidos
               </span>
               <div className="text-2xl font-extrabold text-rose-600 mt-1">
-                {formatCurrency(totalDiscounts)}
+                {canViewTotalRevenue ? formatCurrency(totalDiscounts) : '••••'}
               </div>
               <span className="text-[11px] text-slate-500 mt-0.5 block">Monitoramento de margem</span>
             </div>
@@ -204,7 +205,9 @@ export const ReportsView: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="font-extrabold text-slate-900">{formatCurrency(prod.totalVal)}</div>
+                      <div className="font-extrabold text-slate-900">
+                        {canViewTotalRevenue ? formatCurrency(prod.totalVal) : `${formatQuantity(prod.qty)} un`}
+                      </div>
                     </div>
                   ))
                 )}
@@ -229,9 +232,13 @@ export const ReportsView: React.FC = () => {
                         <div className="text-[10px] text-slate-400">{seller.count} vendas concretizadas</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-extrabold text-slate-900">{formatCurrency(seller.totalVal)}</div>
+                        <div className="font-extrabold text-slate-900">
+                          {canViewTotalRevenue ? formatCurrency(seller.totalVal) : `${seller.count} vendas`}
+                        </div>
                         <div className="text-[10px] text-slate-500">
-                          {((seller.totalVal / (totalRevenue || 1)) * 100).toFixed(1)}% do faturamento
+                          {canViewTotalRevenue
+                            ? `${((seller.totalVal / (totalRevenue || 1)) * 100).toFixed(1)}% do faturamento`
+                            : 'Participação Oculta'}
                         </div>
                       </div>
                     </div>

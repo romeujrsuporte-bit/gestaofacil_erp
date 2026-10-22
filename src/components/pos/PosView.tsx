@@ -35,7 +35,8 @@ import {
   AlertTriangle,
   Scale,
   Calculator,
-  Tag
+  Tag,
+  Boxes,
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { Product, Customer, Order, OrderItem, CashRegister } from '../../types';
@@ -596,6 +597,10 @@ export const PosView: React.FC<PosViewProps> = ({
         totalPrice: quantityToAdd * product.salePrice,
         unitCost: product.costPrice,
         locationId: selectedLocationId,
+        isMasterPack: product.isMasterPack,
+        masterPackUnits: product.masterPackUnits,
+        masterPackAssociatedProductId: product.masterPackAssociatedProductId,
+        masterPackAssociatedProductCode: product.masterPackAssociatedProductCode,
       };
       updatedCart = [...cart, affectedItem];
     }
@@ -1656,6 +1661,12 @@ export const PosView: React.FC<PosViewProps> = ({
                       <td className="py-2 px-3 font-bold text-slate-900 leading-snug text-sm sm:text-base">
                         <div className="flex items-center flex-wrap gap-1">
                           <span>{item.description}</span>
+                          {item.isMasterPack && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                              <Boxes size={11} className="text-amber-700" />
+                              Master ({item.masterPackUnits} un/{item.unit})
+                            </span>
+                          )}
                           {item.discountValue > 0 && (
                             <span className="inline-flex items-center gap-0.5 text-[10px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
                               <Tag size={10} />
