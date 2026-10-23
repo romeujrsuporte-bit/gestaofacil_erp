@@ -22,6 +22,7 @@ import {
   Database as DatabaseIcon,
 } from 'lucide-react';
 import { Database } from '../../services/db';
+import { CashRegister } from './icons/CashRegisterIcon';
 
 interface CommandItem {
   id: string;
@@ -58,7 +59,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       category: 'Vendas & Frente de Caixa',
       shortcut: 'F2',
       targetModule: 'pos',
-      icon: <ShoppingCart size={16} className="text-emerald-600" />,
+      icon: <CashRegister size={16} className="text-emerald-600" />,
       keywords: ['pdv', 'caixa', 'balcao', 'venda', 'cupom', 'frente', 'f2'],
     },
     {

@@ -43,6 +43,7 @@ import { Product, Customer, Order, OrderItem, CashRegister } from '../../types';
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { ReceiptModal } from '../common/ReceiptModal';
+import { CashRegisterIcon } from '../common/icons/CashRegisterIcon';
 import { toast } from '../../services/toast';
 
 export interface PosViewProps {
@@ -111,9 +112,7 @@ export const PosView: React.FC<PosViewProps> = ({
   const [receivedAmount, setReceivedAmount] = useState<string>('');
   const [installments, setInstallments] = useState<number>(1);
   const [selectedLocationId, setSelectedLocationId] = useState<string>(() => {
-    const locs = Database.getState().stockLocations.filter(
-      (l) => l.companyId === Database.getCurrentCompany().id && l.status === 'ativo'
-    );
+    const locs = Database.getState().stockLocations.filter((l) => l.status === 'ativo');
     const comercialLoc = locs.find(
       (l) => l.name.toLowerCase() === 'comercial' || l.type === 'comercial' || l.id === 'loc-comercial'
     );
@@ -430,10 +429,8 @@ export const PosView: React.FC<PosViewProps> = ({
   const customers = dbState.customers.filter((c) => c.status === 'ativo');
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
-  // Locais de estoque
-  const locations = dbState.stockLocations.filter(
-    (l) => l.companyId === currentCompany.id && l.status === 'ativo'
-  );
+  // Locais de estoque (compartilhados entre todas as empresas)
+  const locations = dbState.stockLocations.filter((l) => l.status === 'ativo');
 
   // Autocomplete de produtos conforme digitação
   const searchResults = dbState.products.filter(
@@ -1021,7 +1018,10 @@ export const PosView: React.FC<PosViewProps> = ({
       const movements = [];
 
       for (const item of cart) {
-        const loc = locations.find((l) => l.id === selectedLocationId) || locations[0];
+        const loc = locations.find((l) => l.id === selectedLocationId) ||
+          locations.find((l) => l.id === 'loc-comercial') ||
+          locations[0] ||
+          { id: 'loc-comercial', name: 'Comercial' };
 
         const { updatedBalances, createdMovement } = StockEngine.applyMovement(currentBalances, {
           companyId: currentCompany.id,
@@ -1039,15 +1039,16 @@ export const PosView: React.FC<PosViewProps> = ({
           date: nowIso,
           userId: currentUser.id,
           userName: currentUser.name,
-          notes: `Venda no PDV Balcão ${orderNumber}`,
+          notes: `Venda no PDV Balcão ${orderNumber} (${currentCompany.tradeName || currentCompany.name})`,
         });
 
         currentBalances = updatedBalances;
         movements.push(createdMovement);
       }
 
+      const boletoAccounts = Database.getBoletoAccounts(currentCompany.id);
       const targetBoletoAccount = paymentMethod === 'boleto'
-        ? Database.getBoletoAccounts(currentCompany.id).find((a) => a.id === selectedBoletoAccountId) || Database.getBoletoAccounts(currentCompany.id)[0]
+        ? boletoAccounts.find((a) => a.id === selectedBoletoAccountId) || boletoAccounts[0] || Database.getBoletoAccounts()[0]
         : undefined;
 
       const newOrder: Order = {
@@ -1305,7 +1306,7 @@ export const PosView: React.FC<PosViewProps> = ({
         {/* Lado Esquerdo: Ícone Verde Redondo + Título PDV Balcão + Badge Ativo */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
-            <ShoppingCart size={20} />
+            <CashRegisterIcon size={20} />
           </div>
 
           <div>

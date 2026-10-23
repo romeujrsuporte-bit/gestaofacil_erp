@@ -1497,6 +1497,21 @@ export class Database {
 
         if (this.state) {
           let stateNeedsPersist = false;
+
+          // Garante a existência do depósito comercial compartilhado para todas as empresas
+          if (this.state.stockLocations && !this.state.stockLocations.some((l) => l.id === 'loc-comercial' || l.name.toLowerCase() === 'comercial')) {
+            this.state.stockLocations.unshift({
+              id: 'loc-comercial',
+              code: 'COM-01',
+              name: 'Comercial',
+              companyId: 'comp-matriz',
+              description: 'Estoque Comercial unificado e compartilhado para todas as empresas (Matriz e Filiais)',
+              type: 'comercial',
+              status: 'ativo',
+            });
+            stateNeedsPersist = true;
+          }
+
           if (!this.state.deliveryRoutes || this.state.deliveryRoutes.length === 0) {
             this.state.deliveryRoutes = [...DEFAULT_DELIVERY_ROUTES];
             stateNeedsPersist = true;
@@ -2507,9 +2522,18 @@ export class Database {
       this.persist();
     }
     if (companyId) {
-      return s.financialAccounts.filter((a) => !a.companyId || a.companyId === companyId);
+      const filtered = s.financialAccounts.filter((a) => !a.companyId || a.companyId === companyId);
+      if (filtered.length > 0) return filtered;
     }
     return s.financialAccounts;
+  }
+
+  public static getStockLocations(): StockLocation[] {
+    const s = this.getState();
+    if (!s.stockLocations || s.stockLocations.length === 0) {
+      return [];
+    }
+    return s.stockLocations.filter((l) => l.status === 'ativo');
   }
 
   public static getBoletoAccounts(companyId?: string): FinancialAccountRecord[] {

@@ -89,9 +89,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [productSearch, setProductSearch] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [selectedLocationId, setSelectedLocationId] = useState<string>(() => {
-    const locs = Database.getState().stockLocations.filter(
-      (l) => l.companyId === Database.getCurrentCompany().id && l.status === 'ativo'
-    );
+    const locs = Database.getState().stockLocations.filter((l) => l.status === 'ativo');
     const comercialLoc = locs.find(
       (l) => l.name.toLowerCase() === 'comercial' || l.type === 'comercial' || l.id === 'loc-comercial'
     );
@@ -179,10 +177,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const customers = dbState.customers.filter((c) => c.status === 'ativo');
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
-  const locations = dbState.stockLocations.filter(
-    (l) => l.companyId === currentCompany.id && l.status === 'ativo'
-  );
-  const selectedLocation = locations.find((l) => l.id === selectedLocationId) || locations[0];
+  // Todas as empresas (Matriz e todas as Filiais) utilizam o mesmo estoque unificado
+  const locations = dbState.stockLocations.filter((l) => l.status === 'ativo');
+  const selectedLocation = locations.find((l) => l.id === selectedLocationId) ||
+    locations.find((l) => l.id === 'loc-comercial') ||
+    locations[0] ||
+    { id: 'loc-comercial', code: 'COM-01', name: 'Comercial', type: 'comercial', status: 'ativo', companyId: currentCompany.id };
   const selectedLocationName = selectedLocation?.name || 'Comercial';
 
   // Categorias de produtos
@@ -591,17 +591,24 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       let currentBalances = [...dbState.stockBalances];
       const movements = [];
 
-      // 1. Se for VENDA, baixar estoque
+      // 1. Se for VENDA, baixar estoque unificado compartilhado
       if (docType === 'venda') {
-        const loc = locations.find((l) => l.id === selectedLocationId) || locations[0];
+        const loc = locations.find((l) => l.id === selectedLocationId) ||
+          locations.find((l) => l.id === 'loc-comercial') ||
+          locations[0] ||
+          { id: 'loc-comercial', name: 'Comercial' };
+
         for (const item of cart) {
+          const targetLocId = item.locationId || loc.id || 'loc-comercial';
+          const targetLocName = (item.locationId ? locations.find((l) => l.id === item.locationId)?.name : null) || loc.name || 'Comercial';
+
           const { updatedBalances, createdMovement } = StockEngine.applyMovement(currentBalances, {
             companyId: currentCompany.id,
             productId: item.productId,
             productCode: item.productCode,
             productDescription: item.description,
-            locationId: loc.id,
-            locationName: loc.name,
+            locationId: targetLocId,
+            locationName: targetLocName,
             type: 'saida_venda',
             quantity: item.quantity,
             unitCost: item.unitCost,
@@ -611,7 +618,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             date: nowIso,
             userId: currentUser.id,
             userName: currentUser.name,
-            notes: `Venda ${orderNumber} por ${currentUser.name}`,
+            notes: `Venda ${orderNumber} por ${currentUser.name} (${currentCompany.tradeName || currentCompany.name})`,
           });
           currentBalances = updatedBalances;
           movements.push(createdMovement);
@@ -619,8 +626,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       }
 
       // 2. Criar objeto do pedido
+      const boletoAccounts = Database.getBoletoAccounts(currentCompany.id);
       const targetBoletoAccount = paymentMethod === 'boleto'
-        ? Database.getBoletoAccounts(currentCompany.id).find((a) => a.id === selectedBoletoAccountId) || Database.getBoletoAccounts(currentCompany.id)[0]
+        ? boletoAccounts.find((a) => a.id === selectedBoletoAccountId) || boletoAccounts[0] || Database.getBoletoAccounts()[0]
         : undefined;
 
       const newOrder: Order = {
@@ -814,8 +822,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           productId: item.productId,
           productCode: item.productCode,
           productDescription: item.description,
-          locationId: item.locationId || 'loc-principal',
-          locationName: 'Estoque Principal',
+          locationId: item.locationId || 'loc-comercial',
+          locationName: 'Comercial',
           type: 'saida_venda',
           quantity: item.quantity,
           unitCost: item.unitCost,
@@ -941,7 +949,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
       if (order.type === 'venda' && order.stockDeducted) {
         for (const item of order.items) {
-          const loc = locations.find((l) => l.id === item.locationId) || locations[0];
+          const loc = locations.find((l) => l.id === item.locationId) ||
+            locations.find((l) => l.id === 'loc-comercial') ||
+            locations[0] ||
+            { id: 'loc-comercial', name: 'Comercial' };
           const { updatedBalances, createdMovement } = StockEngine.applyMovement(currentBalances, {
             companyId: currentCompany.id,
             productId: item.productId,
@@ -1952,52 +1963,41 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             </div>
           </div>
 
-          {/* BARRA FIXA DE CONCLUSÃO E EMISSÃO (SEMPRE VISÍVEL NA TELA SEM PRECISAR ROLAR) */}
-          <div className="sticky bottom-0 z-30 bg-slate-900/95 backdrop-blur-md text-white p-3 sm:px-5 rounded-2xl border border-slate-700 shadow-2xl flex items-center justify-between gap-3 mt-2">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider hidden sm:inline">
-                  {docType === 'venda' ? 'Total Pedido' : 'Total Orçamento'}:
+          {/* BARRA FIXA DE RESUMO INFORMATIVO (RODAPÉ) */}
+          <div className="sticky bottom-0 z-30 bg-slate-900/95 backdrop-blur-md text-white p-3.5 sm:px-6 rounded-2xl border border-slate-700 shadow-2xl flex flex-wrap items-center justify-between gap-3 mt-2">
+            <div className="flex items-center flex-wrap gap-2.5 sm:gap-4">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs sm:text-sm text-slate-300 font-extrabold uppercase tracking-wide">
+                  {docType === 'venda' ? 'TOTAL PEDIDO' : 'TOTAL ORÇAMENTO'}:
                 </span>
-                <span className="text-emerald-400 font-mono font-black text-base sm:text-xl">
+                <span className="text-emerald-400 font-mono font-black text-xl sm:text-2xl md:text-3xl tracking-tight">
                   {formatCurrency(orderTotal)}
                 </span>
               </div>
-              <span className="text-xs text-slate-500 hidden sm:inline">•</span>
-              <span className="text-xs text-slate-300 font-medium hidden md:inline">
+              <span className="text-slate-500 text-sm hidden sm:inline">•</span>
+              <span className="text-xs sm:text-sm text-slate-300 font-medium">
                 {cart.length} item{cart.length === 1 ? '' : 's'} ({cart.reduce((s, i) => s + i.quantity, 0)} volumes)
               </span>
               {totalItemAdditions > 0 && (
-                <span className="text-[10px] font-bold text-blue-300 bg-blue-950/60 border border-blue-800 px-2 py-0.5 rounded hidden lg:inline">
+                <span className="text-[11px] font-bold text-blue-300 bg-blue-950/70 border border-blue-700 px-2.5 py-0.5 rounded-md">
                   Acréscimos: +{formatCurrency(totalItemAdditions)}
                 </span>
               )}
               {combinedDiscounts > 0 && (
-                <span className="text-[10px] font-bold text-amber-300 bg-amber-950/60 border border-amber-800 px-2 py-0.5 rounded hidden lg:inline">
+                <span className="text-[11px] font-bold text-amber-300 bg-amber-950/70 border border-amber-700 px-2.5 py-0.5 rounded-md">
                   Descontos: -{formatCurrency(combinedDiscounts)}
                 </span>
               )}
             </div>
 
-            <button
-              type="button"
-              disabled={cart.length === 0}
-              onClick={handleFinalizeOrder}
-              className={`px-4 sm:px-6 py-2.5 rounded-xl font-black text-xs sm:text-sm text-white flex items-center gap-2 shadow-lg transition-all cursor-pointer disabled:opacity-40 shrink-0 ${
-                docType === 'venda'
-                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40'
-                  : 'bg-blue-600 hover:bg-blue-500 shadow-blue-950/40'
-              }`}
-              title="Atalho: Tecla F10 ou Ctrl+Enter no teclado para finalizar sem o mouse"
-            >
-              {docType === 'venda' ? <CheckCircle2 size={18} /> : <FileText size={18} />}
-              <span>
-                {docType === 'venda' ? 'FINALIZAR E EMITIR PEDIDO DE VENDA' : 'GERAR PROPOSTA DE ORÇAMENTO'}
-              </span>
-              <kbd className="bg-black/30 text-white text-[11px] px-2 py-0.5 rounded font-mono font-bold border border-white/20">
+            {/* Dica de atalho no rodapé harmonizada com a remoção do botão duplicado */}
+            <div className="hidden md:flex items-center gap-2 text-xs text-slate-400 font-semibold bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/70">
+              <span>Finalizar:</span>
+              <kbd className="bg-slate-900 text-emerald-400 border border-slate-600 px-2 py-0.5 rounded font-mono font-bold text-[11px]">
                 F10
               </kbd>
-            </button>
+              <span className="text-slate-500">ou botão acima</span>
+            </div>
           </div>
         </div>
       ) : (

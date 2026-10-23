@@ -141,9 +141,7 @@ export const ExternalSalesView: React.FC = () => {
   });
   const [installments, setInstallments] = useState<number>(1);
   const [selectedLocationId, setSelectedLocationId] = useState<string>(() => {
-    const locs = Database.getState().stockLocations.filter(
-      (l) => l.companyId === Database.getCurrentCompany().id && l.status === 'ativo'
-    );
+    const locs = Database.getState().stockLocations.filter((l) => l.status === 'ativo');
     const comercialLoc = locs.find(
       (l) => l.name.toLowerCase() === 'comercial' || l.type === 'comercial' || l.id === 'loc-comercial'
     );
@@ -191,11 +189,12 @@ export const ExternalSalesView: React.FC = () => {
   const customers = dbState.customers.filter((c) => c.status === 'ativo');
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
-  // Depósitos de Estoque
-  const locations = dbState.stockLocations.filter(
-    (l) => l.companyId === currentCompany.id && l.status === 'ativo'
-  );
-  const selectedLocation = locations.find((l) => l.id === selectedLocationId) || locations[0];
+  // Depósitos de Estoque (compartilhados entre todas as empresas)
+  const locations = dbState.stockLocations.filter((l) => l.status === 'ativo');
+  const selectedLocation = locations.find((l) => l.id === selectedLocationId) ||
+    locations.find((l) => l.id === 'loc-comercial') ||
+    locations[0] ||
+    { id: 'loc-comercial', code: 'COM-01', name: 'Comercial', type: 'comercial', status: 'ativo', companyId: currentCompany.id };
   const selectedLocationName = selectedLocation?.name || 'Comercial';
 
   // Histórico de pedidos realizados exclusivamente no Vendas Mobile
@@ -716,8 +715,9 @@ export const ExternalSalesView: React.FC = () => {
         }
       }
 
+      const boletoAccounts = Database.getBoletoAccounts(currentCompany.id);
       const targetBoletoAccount = paymentMethod === 'boleto'
-        ? Database.getBoletoAccounts(currentCompany.id).find((a) => a.id === selectedBoletoAccountId) || Database.getBoletoAccounts(currentCompany.id)[0]
+        ? boletoAccounts.find((a) => a.id === selectedBoletoAccountId) || boletoAccounts[0] || Database.getBoletoAccounts()[0]
         : undefined;
 
       const newOrder: Order = {
@@ -851,29 +851,29 @@ export const ExternalSalesView: React.FC = () => {
   const cartTotal = Math.max(0, cartSubtotal + cartGlobalAddition - cartGlobalDiscount);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-3.5 pb-16">
+    <div className="max-w-3xl mx-auto space-y-4 pb-20 px-1 sm:px-0">
       {/* BANNER SUPERIOR ESTILO APP MOBILE - TEMA VERDE E PRETO ELEGANTE */}
-      <div className="bg-gradient-to-r from-slate-950 via-zinc-900 to-slate-950 rounded-2xl p-4 text-white shadow-lg border border-slate-800">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shadow-xs shrink-0">
-              <Smartphone size={22} />
+      <div className="bg-gradient-to-r from-slate-950 via-zinc-900 to-slate-950 rounded-2xl p-4 sm:p-5 text-white shadow-lg border border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600/25 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shadow-xs shrink-0">
+              <Smartphone size={26} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-black tracking-tight text-white">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
                   Vendas Mobile
                 </h2>
-                <span className="text-[10px] font-black uppercase px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <span className="text-xs font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   Campo & Rua
                 </span>
               </div>
-              <div className="text-xs text-slate-300 flex items-center gap-2 mt-0.5 flex-wrap">
+              <div className="text-xs sm:text-sm text-slate-300 flex items-center gap-2 mt-1 flex-wrap">
                 <span>Vendedor: <strong>{currentUser.name.split(' ')[0]}</strong></span>
                 <span className="text-slate-600">•</span>
-                <span className="flex items-center gap-1 text-[11px] bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
-                  {isOnline ? <Wifi size={12} className="text-emerald-400" /> : <WifiOff size={12} className="text-rose-400" />}
-                  <span className={isOnline ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
+                <span className="flex items-center gap-1.5 text-xs bg-slate-800/90 px-2.5 py-1 rounded-full border border-slate-700">
+                  {isOnline ? <Wifi size={14} className="text-emerald-400" /> : <WifiOff size={14} className="text-rose-400" />}
+                  <span className={isOnline ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
                     {isOnline ? 'Sincronizado' : 'Offline'}
                   </span>
                 </span>
@@ -882,11 +882,11 @@ export const ExternalSalesView: React.FC = () => {
           </div>
 
           {/* Alternador Venda vs Orçamento */}
-          <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 self-stretch sm:self-auto justify-center">
             <button
               type="button"
               onClick={() => setDocType('venda')}
-              className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial text-xs sm:text-sm font-black px-4 py-2.5 rounded-xl transition-all cursor-pointer ${
                 docType === 'venda'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-400 hover:text-white'
@@ -897,7 +897,7 @@ export const ExternalSalesView: React.FC = () => {
             <button
               type="button"
               onClick={() => setDocType('orcamento')}
-              className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial text-xs sm:text-sm font-black px-4 py-2.5 rounded-xl transition-all cursor-pointer ${
                 docType === 'orcamento'
                   ? 'bg-slate-800 text-emerald-400 border border-emerald-500/40 shadow-xs'
                   : 'text-slate-400 hover:text-white'
@@ -910,49 +910,49 @@ export const ExternalSalesView: React.FC = () => {
       </div>
 
       {/* BARRA DE NAVEGAÇÃO POR ABAS MOBILE (INICIA NO HISTÓRICO) */}
-      <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-xs gap-1">
+      <div className="grid grid-cols-4 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs gap-1.5">
         <button
           type="button"
           onClick={() => setActiveTab('historico')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`py-3 px-1 sm:px-2 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer relative ${
             activeTab === 'historico'
-              ? 'bg-slate-950 text-emerald-400 border border-emerald-500/30 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              ? 'bg-slate-950 text-emerald-400 border border-emerald-500/30 shadow-xs font-black'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-bold'
           }`}
         >
-          <Clock size={15} />
-          <span>Histórico & Análise</span>
+          <Clock size={18} />
+          <span className="text-xs sm:text-sm truncate">Histórico</span>
           {customersWithOverdue.length > 0 && (
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" title="Clientes com débitos vencidos" />
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse absolute top-1.5 right-1.5 sm:static sm:w-2 sm:h-2" title="Clientes com débitos vencidos" />
           )}
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('catalogo')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`py-3 px-1 sm:px-2 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
             activeTab === 'catalogo'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              ? 'bg-emerald-600 text-white shadow-xs font-black'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-bold'
           }`}
         >
-          <ShoppingBag size={15} />
-          <span>Produtos</span>
+          <ShoppingBag size={18} />
+          <span className="text-xs sm:text-sm truncate">Produtos</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('carrinho')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 relative cursor-pointer ${
+          className={`py-3 px-1 sm:px-2 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 relative cursor-pointer ${
             activeTab === 'carrinho'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              ? 'bg-emerald-600 text-white shadow-xs font-black'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-bold'
           }`}
         >
-          <CheckCircle size={15} />
-          <span>Pedido</span>
+          <CheckCircle size={18} />
+          <span className="text-xs sm:text-sm truncate">Pedido</span>
           {cart.length > 0 && (
-            <span className="w-5 h-5 bg-slate-950 text-emerald-400 border border-emerald-400 text-[10px] font-black rounded-full flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 sm:static sm:ml-1 w-5 h-5 bg-slate-950 text-emerald-400 border border-emerald-400 text-xs font-black rounded-full flex items-center justify-center shadow-xs">
               {cart.reduce((s, i) => s + i.quantity, 0)}
             </span>
           )}
@@ -961,14 +961,14 @@ export const ExternalSalesView: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('novo_cliente')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`py-3 px-1 sm:px-2 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
             activeTab === 'novo_cliente'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              ? 'bg-emerald-600 text-white shadow-xs font-black'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-bold'
           }`}
         >
-          <UserPlus size={15} />
-          <span>+ Cliente</span>
+          <UserPlus size={18} />
+          <span className="text-xs sm:text-sm truncate">+ Cliente</span>
         </button>
       </div>
 
@@ -976,26 +976,26 @@ export const ExternalSalesView: React.FC = () => {
       {/* ABA PRINCIPAL 1: HISTÓRICO & ANÁLISE DE VENDAS E FINANCEIRO DOS CLIENTES  */}
       {/* ========================================================================= */}
       {activeTab === 'historico' && (
-        <div className="space-y-3.5">
+        <div className="space-y-4">
           {/* ALERTA DE INADIMPLÊNCIA COM RECURSO DE OCULTAR / EXIBIR */}
           {customersWithOverdue.length > 0 ? (
             showOverdueAlert ? (
-              <div className="bg-gradient-to-r from-slate-950 via-rose-950/40 to-slate-900 text-white p-3.5 sm:p-4 rounded-2xl border-2 border-rose-500/60 shadow-md space-y-2.5 transition-all">
+              <div className="bg-gradient-to-r from-slate-950 via-rose-950/40 to-slate-900 text-white p-4 sm:p-5 rounded-2xl border-2 border-rose-500/60 shadow-md space-y-3 transition-all">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs animate-pulse">
-                      <AlertTriangle size={20} />
+                    <div className="w-11 h-11 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs animate-pulse">
+                      <AlertTriangle size={22} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-black uppercase bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/30">
+                        <span className="text-xs font-black uppercase bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/30">
                           Alerta de Inadimplência
                         </span>
-                        <span className="text-xs font-bold text-rose-200">
+                        <span className="text-xs sm:text-sm font-bold text-rose-200">
                           {customersWithOverdue.length} cliente(s) com parcelas vencidas
                         </span>
                       </div>
-                      <h4 className="text-sm sm:text-base font-black text-white mt-0.5">
+                      <h4 className="text-sm sm:text-base font-black text-white mt-1">
                         Total em Atraso: <span className="text-rose-400 font-mono">{formatCurrency(totalOverdueExternal)}</span>
                       </h4>
                     </div>
@@ -1005,46 +1005,46 @@ export const ExternalSalesView: React.FC = () => {
                   <button
                     type="button"
                     onClick={toggleOverdueAlert}
-                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
+                    className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
                     title="Ocultar Alerta de Inadimplência"
                   >
-                    <X size={16} />
+                    <X size={18} />
                   </button>
                 </div>
 
-                <p className="text-[11px] text-slate-300 leading-relaxed">
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                   Atenção antes de emitir novos pedidos faturados ou liberar limite de crédito. Utilize a Análise Financeira para verificar parcelas e negociar via WhatsApp.
                 </p>
 
-                <div className="flex items-center justify-between pt-1 border-t border-rose-500/20 gap-2 flex-wrap">
+                <div className="flex items-center justify-between pt-2 border-t border-rose-500/20 gap-2.5 flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
                       setHistorySubTab('analise_financeira');
                       setClientFilter('vencidos');
                     }}
-                    className="inline-flex items-center gap-1.5 text-xs font-black text-rose-300 hover:text-white bg-rose-950/70 hover:bg-rose-900 px-3 py-1.5 rounded-xl border border-rose-500/40 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-2 text-xs sm:text-sm font-black text-rose-300 hover:text-white bg-rose-950/70 hover:bg-rose-900 px-3.5 py-2.5 rounded-xl border border-rose-500/40 transition-colors cursor-pointer"
                   >
-                    <ShieldAlert size={14} />
+                    <ShieldAlert size={16} />
                     <span>Ver Clientes Inadimplentes ({customersWithOverdue.length})</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={toggleOverdueAlert}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer ml-auto"
+                    className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer ml-auto py-1.5"
                   >
-                    <EyeOff size={13} />
+                    <EyeOff size={15} />
                     <span>Ocultar Alerta</span>
                   </button>
                 </div>
               </div>
             ) : (
               /* BARRA COMPACTA QUANDO O ALERTA ESTÁ OCULTO */
-              <div className="bg-gradient-to-r from-slate-950 via-zinc-900 to-slate-950 p-2.5 px-3.5 rounded-2xl border border-rose-500/40 shadow-xs flex items-center justify-between gap-2 text-white">
-                <div className="flex items-center gap-2 text-xs flex-wrap">
-                  <AlertTriangle size={15} className="text-rose-400 shrink-0 animate-pulse" />
-                  <span className="font-bold text-rose-300">Alerta de Inadimplência:</span>
+              <div className="bg-gradient-to-r from-slate-950 via-zinc-900 to-slate-950 p-3 sm:px-4 rounded-2xl border border-rose-500/40 shadow-xs flex items-center justify-between gap-2.5 text-white">
+                <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
+                  <AlertTriangle size={16} className="text-rose-400 shrink-0 animate-pulse" />
+                  <span className="font-extrabold text-rose-300">Alerta de Inadimplência:</span>
                   <span className="text-slate-300">
                     {customersWithOverdue.length} cliente(s) com parcelas vencidas
                   </span>
@@ -1055,51 +1055,54 @@ export const ExternalSalesView: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleOverdueAlert}
-                  className="inline-flex items-center gap-1 text-xs font-black bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 hover:text-white px-2.5 py-1 rounded-xl border border-rose-500/40 transition-colors cursor-pointer shrink-0"
+                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 hover:text-white px-3 py-1.5 rounded-xl border border-rose-500/40 transition-colors cursor-pointer shrink-0"
                 >
-                  <Eye size={13} />
+                  <Eye size={15} />
                   <span>Exibir Alerta</span>
                 </button>
               </div>
             )
           ) : (
-            <div className="bg-emerald-950/20 border border-emerald-500/30 text-emerald-900 p-2.5 px-3.5 rounded-2xl flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs">
-                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+            <div className="bg-emerald-950/20 border border-emerald-500/30 text-emerald-900 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 text-xs sm:text-sm">
+                <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
                 <span className="font-extrabold text-emerald-950">Carteira 100% em Dia:</span>
-                <span className="text-emerald-800 text-[11px]">Nenhum cliente com parcelas vencidas no momento.</span>
+                <span className="text-emerald-800 text-xs sm:text-sm font-medium">Nenhum cliente com parcelas vencidas no momento.</span>
               </div>
             </div>
           )}
 
           {/* Seletor de Sub-Aba dentro do Histórico */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-black">
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 text-xs sm:text-sm font-black gap-1.5">
             <button
               type="button"
               onClick={() => setHistorySubTab('pedidos')}
-              className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-3 px-2 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 historySubTab === 'pedidos'
-                  ? 'bg-slate-950 text-emerald-400 shadow-xs border border-emerald-500/30'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-slate-950 text-emerald-400 shadow-xs border border-emerald-500/30 font-black'
+                  : 'text-slate-600 hover:text-slate-900 font-bold'
               }`}
             >
-              <Clock size={14} className={historySubTab === 'pedidos' ? 'text-emerald-400' : 'text-slate-500'} />
+              <Clock size={16} className={historySubTab === 'pedidos' ? 'text-emerald-400' : 'text-slate-500'} />
               <span>Histórico de Pedidos ({myOrders.length})</span>
             </button>
             <button
               type="button"
               onClick={() => setHistorySubTab('analise_financeira')}
-              className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-3 px-2 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 historySubTab === 'analise_financeira'
-                  ? 'bg-slate-950 text-emerald-400 shadow-xs border border-emerald-500/30'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-slate-950 text-emerald-400 shadow-xs border border-emerald-500/30 font-black'
+                  : 'text-slate-600 hover:text-slate-900 font-bold'
               }`}
             >
-              <TrendingUp size={14} className={historySubTab === 'analise_financeira' ? 'text-emerald-400' : 'text-emerald-600'} />
-              <span>Análise de Clientes & Financeiro</span>
+              <TrendingUp size={16} className={historySubTab === 'analise_financeira' ? 'text-emerald-400' : 'text-emerald-600'} />
+              <span>
+                <span className="hidden sm:inline">Análise de Clientes & Financeiro</span>
+                <span className="sm:hidden">Análise Financeira</span>
+              </span>
               {customersWithOverdue.length > 0 && (
-                <span className="px-1.5 py-0.2 bg-rose-600 text-white text-[10px] rounded-full font-mono">
-                  {customersWithOverdue.length} alerta{customersWithOverdue.length === 1 ? '' : 's'}
+                <span className="px-2 py-0.5 bg-rose-600 text-white text-xs rounded-full font-mono font-black">
+                  {customersWithOverdue.length}
                 </span>
               )}
             </button>
@@ -1109,57 +1112,57 @@ export const ExternalSalesView: React.FC = () => {
           {/* SUB-ABA 1: HISTÓRICO DE VENDAS DOS ÚLTIMOS PEDIDOS COM FILTROS COMPLETOS   */}
           {/* ========================================================================= */}
           {historySubTab === 'pedidos' && (
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {/* Cabeçalho da Seção de Pedidos */}
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-2 flex-wrap">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                  <h3 className="font-black text-xs sm:text-sm text-slate-900 flex items-center gap-2">
+                  <h3 className="font-black text-sm sm:text-base text-slate-900 flex items-center gap-2 flex-wrap">
                     <span>Histórico de Vendas dos Últimos Pedidos</span>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.2 rounded-full font-bold">
+                    <span className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full font-extrabold">
                       {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido' : 'pedidos'}
                     </span>
                   </h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
                     Consulte, filtre e compartilhe comprovantes de vendas e orçamentos externos
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setActiveTab('catalogo')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-black shadow-xs transition-colors cursor-pointer"
                 >
-                  <Plus size={14} />
+                  <Plus size={16} />
                   <span>+ Novo Pedido</span>
                 </button>
               </div>
 
               {/* Barra de Filtros Completos dos Pedidos */}
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
                 {/* Campo de Busca Textual */}
                 <div className="relative">
-                  <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+                  <Search size={18} className="absolute left-3.5 top-3.5 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Buscar por nº pedido (PED-EXT...), nome do cliente, telefone ou produto..."
+                    placeholder="Buscar por nº pedido, cliente, telefone ou produto..."
                     value={orderSearchTerm}
                     onChange={(e) => setOrderSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                    className="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base font-medium text-slate-800 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                   />
                   {orderSearchTerm && (
                     <button
                       type="button"
                       onClick={() => setOrderSearchTerm('')}
-                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                      className="absolute right-3 top-3 p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200"
                     >
-                      <X size={14} />
+                      <X size={16} />
                     </button>
                   )}
                 </div>
 
                 {/* Filtros por Tipo de Documento */}
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Tipo de Documento:</span>
-                  <div className="flex gap-1.5 overflow-x-auto pb-0.5 text-xs">
+                <div className="space-y-1.5">
+                  <span className="text-xs font-extrabold uppercase text-slate-500 block">Tipo de Documento:</span>
+                  <div className="flex gap-2 overflow-x-auto pb-1 text-xs sm:text-sm">
                     {[
                       { id: 'todos', label: `Todos (${myOrders.length})` },
                       { id: 'venda', label: `🛒 Vendas (${myOrders.filter((o) => o.type === 'venda').length})` },
@@ -1169,10 +1172,10 @@ export const ExternalSalesView: React.FC = () => {
                         key={f.id}
                         type="button"
                         onClick={() => setOrderTypeFilter(f.id as any)}
-                        className={`px-3 py-1 rounded-xl font-bold whitespace-nowrap text-xs transition-all cursor-pointer ${
+                        className={`px-3.5 py-2.5 rounded-xl font-black whitespace-nowrap text-xs sm:text-sm transition-all cursor-pointer ${
                           orderTypeFilter === f.id
                             ? 'bg-slate-950 text-emerald-400 border border-emerald-500/30 shadow-xs'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                         }`}
                       >
                         {f.label}
@@ -1182,31 +1185,31 @@ export const ExternalSalesView: React.FC = () => {
                 </div>
 
                 {/* Linha de Filtros: Período e Status */}
-                <div className="space-y-2 pt-1 border-t border-slate-100">
+                <div className="space-y-3 pt-2 border-t border-slate-100">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-bold uppercase text-slate-400 block">Período:</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-extrabold uppercase text-slate-500 block">Período:</label>
                       {orderPeriodFilter === 'mes_atual' && (
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
+                        <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold">
                           Mês Atual ({new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })})
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs sm:text-sm">
                       {[
                         { id: 'hoje', label: 'Hoje' },
                         { id: 'mes_atual', label: 'Mês Atual' },
-                        { id: 'personalizado', label: 'Pesquisa Personalizada' },
+                        { id: 'personalizado', label: 'Personalizado' },
                         { id: 'todos', label: 'Todos' },
                       ].map((p) => (
                         <button
                           key={p.id}
                           type="button"
                           onClick={() => setOrderPeriodFilter(p.id as any)}
-                          className={`px-2 py-1.5 rounded-lg text-center text-xs font-bold transition-all cursor-pointer truncate ${
+                          className={`px-3 py-2.5 rounded-xl text-center text-xs sm:text-sm font-extrabold transition-all cursor-pointer truncate ${
                             orderPeriodFilter === p.id
                               ? 'bg-emerald-600 text-white shadow-2xs'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
                         >
                           {p.label}
@@ -1216,37 +1219,34 @@ export const ExternalSalesView: React.FC = () => {
 
                     {/* Bloco de Pesquisa Personalizada */}
                     {orderPeriodFilter === 'personalizado' && (
-                      <div className="mt-2 p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl space-y-2">
+                      <div className="mt-2.5 p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl space-y-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-black text-emerald-950 flex items-center gap-1.5">
-                            <Calendar size={13} className="text-emerald-600" />
-                            Pesquisa Personalizada por Período
-                          </span>
-                          <span className="text-[10px] text-emerald-700 font-medium">
-                            Selecione o intervalo de datas
+                          <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                            <Calendar size={15} className="text-emerald-600" />
+                            Intervalo de Datas
                           </span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           <div>
-                            <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                            <label className="text-xs font-bold uppercase text-slate-600 block mb-1">
                               Data Inicial:
                             </label>
                             <input
                               type="date"
                               value={customStartDate}
                               onChange={(e) => setCustomStartDate(e.target.value)}
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                              className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                             />
                           </div>
                           <div>
-                            <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                            <label className="text-xs font-bold uppercase text-slate-600 block mb-1">
                               Data Final:
                             </label>
                             <input
                               type="date"
                               value={customEndDate}
                               onChange={(e) => setCustomEndDate(e.target.value)}
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                              className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                             />
                           </div>
                         </div>
@@ -1255,8 +1255,8 @@ export const ExternalSalesView: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Status:</label>
-                    <div className="flex gap-1 overflow-x-auto text-xs">
+                    <label className="text-xs font-extrabold uppercase text-slate-500 block mb-1.5">Status:</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs sm:text-sm">
                       {[
                         { id: 'todos', label: 'Todos' },
                         { id: 'concluido', label: 'Concluído' },
@@ -1267,10 +1267,10 @@ export const ExternalSalesView: React.FC = () => {
                           key={s.id}
                           type="button"
                           onClick={() => setOrderStatusFilter(s.id as any)}
-                          className={`flex-1 px-2 py-1 rounded-lg text-center text-xs font-bold transition-all cursor-pointer ${
+                          className={`px-3 py-2.5 rounded-xl text-center text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
                             orderStatusFilter === s.id
                               ? 'bg-emerald-600 text-white shadow-2xs'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
                         >
                           {s.label}
@@ -1280,8 +1280,8 @@ export const ExternalSalesView: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Forma de Pagto:</label>
-                    <div className="flex gap-1 overflow-x-auto text-xs">
+                    <label className="text-xs font-extrabold uppercase text-slate-500 block mb-1.5">Forma de Pagto:</label>
+                    <div className="flex gap-1.5 overflow-x-auto pb-0.5 text-xs sm:text-sm">
                       {[
                         { id: 'todos', label: 'Todas' },
                         { id: 'boleto', label: 'Boleto' },
@@ -1293,10 +1293,10 @@ export const ExternalSalesView: React.FC = () => {
                           key={m.id}
                           type="button"
                           onClick={() => setOrderPaymentFilter(m.id)}
-                          className={`flex-1 px-2 py-1 rounded-lg text-center text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          className={`px-3.5 py-2.5 rounded-xl text-center text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                             orderPaymentFilter === m.id
                               ? 'bg-emerald-600 text-white shadow-2xs'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
                         >
                           {m.label}
@@ -1312,9 +1312,9 @@ export const ExternalSalesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={resetOrderFilters}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer py-1"
                     >
-                      <RotateCcw size={12} />
+                      <RotateCcw size={14} />
                       <span>Limpar Filtros</span>
                     </button>
                   </div>
@@ -1322,9 +1322,9 @@ export const ExternalSalesView: React.FC = () => {
               </div>
 
               {/* Indicadores Consolidados dos Pedidos Filtrados */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block truncate">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-slate-500 block truncate">
                     {orderPeriodFilter === 'mes_atual'
                       ? 'Pedidos do Mês'
                       : orderPeriodFilter === 'hoje'
@@ -1333,10 +1333,10 @@ export const ExternalSalesView: React.FC = () => {
                       ? 'Pedidos no Período'
                       : 'Pedidos Filtrados'}
                   </span>
-                  <span className="text-sm font-black text-slate-900">{filteredOrders.length}</span>
+                  <span className="text-base sm:text-xl font-black text-slate-900 font-mono mt-0.5 block">{filteredOrders.length}</span>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block truncate">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-slate-500 block truncate">
                     {orderPeriodFilter === 'mes_atual'
                       ? 'Total Vendas Mês'
                       : orderPeriodFilter === 'hoje'
@@ -1345,12 +1345,12 @@ export const ExternalSalesView: React.FC = () => {
                       ? 'Total Vendas Período'
                       : 'Total em Vendas'}
                   </span>
-                  <span className="text-sm font-black text-emerald-700 font-mono">
+                  <span className="text-base sm:text-xl font-black text-emerald-700 font-mono mt-0.5 block">
                     {formatCurrency(filteredSalesTotal)}
                   </span>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block truncate">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-slate-500 block truncate">
                     {orderPeriodFilter === 'mes_atual'
                       ? 'Orçamentos do Mês'
                       : orderPeriodFilter === 'hoje'
@@ -1359,13 +1359,13 @@ export const ExternalSalesView: React.FC = () => {
                       ? 'Orçamentos Período'
                       : 'Orçamentos'}
                   </span>
-                  <span className="text-sm font-black text-amber-600 font-mono">
+                  <span className="text-base sm:text-xl font-black text-amber-600 font-mono mt-0.5 block">
                     {formatCurrency(filteredQuotesTotal)}
                   </span>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block truncate">Ticket Médio</span>
-                  <span className="text-sm font-black text-slate-800 font-mono">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-slate-500 block truncate">Ticket Médio</span>
+                  <span className="text-base sm:text-xl font-black text-slate-800 font-mono mt-0.5 block">
                     {formatCurrency(avgFilteredTicket)}
                   </span>
                 </div>
@@ -1560,48 +1560,48 @@ export const ExternalSalesView: React.FC = () => {
           {historySubTab === 'analise_financeira' && (
             <div className="space-y-3">
               {/* Resumo de Indicadores da Carteira de Clientes */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Clientes Cadastrados</span>
-                  <span className="text-sm font-black text-slate-900">{customers.length}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-slate-500 block">Clientes Cadastrados</span>
+                  <span className="text-base sm:text-xl font-black text-slate-900 font-mono mt-0.5 block">{customers.length}</span>
                 </div>
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Comprado</span>
-                  <span className="text-sm font-black text-emerald-700 font-mono">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-slate-500 block">Total Comprado</span>
+                  <span className="text-base sm:text-xl font-black text-emerald-700 font-mono mt-0.5 block">
                     {formatCurrency(totalRevenueExternal)}
                   </span>
                 </div>
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Em Aberto a Receber</span>
-                  <span className="text-sm font-black text-slate-800 font-mono">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-slate-500 block">Em Aberto a Receber</span>
+                  <span className="text-base sm:text-xl font-black text-slate-800 font-mono mt-0.5 block">
                     {formatCurrency(customersAnalysis.reduce((s, c) => s + c.totalOpenBalance, 0))}
                   </span>
                 </div>
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase text-rose-500 block">Total Vencido</span>
-                  <span className="text-sm font-black text-rose-600 font-mono">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold uppercase text-rose-500 block">Total Vencido</span>
+                  <span className="text-base sm:text-xl font-black text-rose-600 font-mono mt-0.5 block">
                     {formatCurrency(totalOverdueExternal)}
                   </span>
                 </div>
               </div>
 
               {/* Barra de Busca e Filtros de Análise */}
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs space-y-2">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
                 <div className="relative">
-                  <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+                  <Search size={18} className="absolute left-3.5 top-3.5 text-slate-400" />
                   <input
                     type="text"
                     placeholder="Pesquisar cliente por nome, CNPJ/CPF, telefone ou cidade..."
                     value={clientSearchTerm}
                     onChange={(e) => setClientSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base font-medium text-slate-800 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                   />
                 </div>
 
-                <div className="flex gap-1.5 overflow-x-auto pb-0.5 text-xs">
+                <div className="flex gap-2 overflow-x-auto pb-1 text-xs sm:text-sm">
                   {[
                     { id: 'todos', label: `Todos (${customersAnalysis.length})` },
-                    { id: 'vencidos', label: `⚠️ Com Parcela Vencida (${customersWithOverdue.length})` },
+                    { id: 'vencidos', label: `⚠️ Parcela Vencida (${customersWithOverdue.length})` },
                     { id: 'em_dia', label: `🟢 Em Dia (${customersInGoodStanding.length})` },
                     { id: 'top_compradores', label: '⭐ Mais Compradores' },
                   ].map((f) => (
@@ -1609,10 +1609,10 @@ export const ExternalSalesView: React.FC = () => {
                       key={f.id}
                       type="button"
                       onClick={() => setClientFilter(f.id as any)}
-                      className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap text-xs transition-all cursor-pointer ${
+                      className={`px-4 py-2.5 rounded-xl font-black whitespace-nowrap text-xs sm:text-sm transition-all cursor-pointer ${
                         clientFilter === f.id
                           ? 'bg-slate-950 text-emerald-400 border border-emerald-500/30 shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
                       {f.label}
@@ -1850,30 +1850,30 @@ export const ExternalSalesView: React.FC = () => {
       {/* ABA PRINCIPAL 2: CATÁLOGO DE PRODUTOS PARA VENDA EXTERNA                  */}
       {/* ========================================================================= */}
       {activeTab === 'catalogo' && (
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {/* Busca e Filtros de Categoria */}
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+              <Search className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
               <input
                 type="text"
                 placeholder="Buscar produto por nome ou código..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base text-slate-800 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-2xs"
               />
             </div>
 
-            <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs">
+            <div className="flex gap-2 overflow-x-auto pb-1 text-xs sm:text-sm">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap capitalize transition-colors cursor-pointer ${
+                  className={`px-4 py-2.5 rounded-xl font-black whitespace-nowrap capitalize transition-colors cursor-pointer ${
                     selectedCategory === cat
                       ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {cat}
@@ -1883,7 +1883,7 @@ export const ExternalSalesView: React.FC = () => {
           </div>
 
           {/* Lista de Itens do Catálogo */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {filteredProducts.map((p) => {
               const locStock = StockEngine.getBalance(dbState.stockBalances, p.id, selectedLocationId);
               const availableQty = locStock?.quantity || 0;
@@ -1892,63 +1892,63 @@ export const ExternalSalesView: React.FC = () => {
               return (
                 <div
                   key={p.id}
-                  className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-300 shadow-xs flex items-center justify-between gap-3 transition-all"
+                  className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-emerald-300 shadow-xs flex items-center justify-between gap-3.5 transition-all"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                         {p.code}
                       </span>
                       <span
-                        className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
+                        className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
                           availableQty > 0
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                             : 'bg-rose-50 text-rose-800 border border-rose-200'
                         }`}
                       >
-                        Estoque {selectedLocationName}: {formatQuantity(availableQty)} {p.unit}
+                        Estoque: {formatQuantity(availableQty)} {p.unit}
                       </span>
                       {p.isMasterPack && (
-                        <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-900 font-extrabold px-1.5 py-0.2 rounded border border-amber-300">
-                          <Boxes size={10} className="text-amber-700" />
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-amber-100 text-amber-900 font-extrabold px-2 py-0.5 rounded-md border border-amber-300">
+                          <Boxes size={12} className="text-amber-700" />
                           Master ({p.masterPackUnits} un/{p.unit})
                         </span>
                       )}
                     </div>
-                    <div className="font-extrabold text-xs sm:text-sm text-slate-900 mt-1 leading-snug truncate">
+                    <div className="font-extrabold text-sm sm:text-base text-slate-900 mt-1.5 leading-snug">
                       {p.description}
                     </div>
-                    <div className="text-emerald-700 font-black text-sm mt-1 font-mono">
+                    <div className="text-emerald-700 font-black text-base sm:text-lg mt-1 font-mono">
                       {formatCurrency(p.salePrice)}
                     </div>
                   </div>
 
                   {/* Ação de Adicionar ou Contador */}
                   {inCart ? (
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 p-1 rounded-xl">
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 p-1.5 rounded-2xl">
                         <button
                           type="button"
                           onClick={() => handleUpdateQty(p.id, -1)}
-                          className="w-7 h-7 bg-white text-emerald-800 rounded-lg font-bold text-xs flex items-center justify-center shadow-xs cursor-pointer hover:bg-slate-100"
+                          className="w-9 h-9 sm:w-10 sm:h-10 bg-white text-emerald-800 rounded-xl font-black text-sm flex items-center justify-center shadow-xs cursor-pointer hover:bg-slate-100 active:scale-95 transition-all"
                         >
-                          <Minus size={13} />
+                          <Minus size={16} />
                         </button>
-                        <span className="w-6 text-center text-xs font-black text-emerald-950 font-mono">
+                        <span className="w-8 text-center text-sm font-black text-emerald-950 font-mono">
                           {inCart.quantity}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleAddToCart(p)}
-                          className="w-7 h-7 bg-emerald-600 text-white rounded-lg font-bold text-xs flex items-center justify-center shadow-xs cursor-pointer hover:bg-emerald-700"
+                          className="w-9 h-9 sm:w-10 sm:h-10 bg-emerald-600 text-white rounded-xl font-black text-sm flex items-center justify-center shadow-xs cursor-pointer hover:bg-emerald-700 active:scale-95 transition-all"
                         >
-                          <Plus size={13} />
+                          <Plus size={16} />
                         </button>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleOpenItemAdjustment(inCart)}
-                        className={`text-[9px] font-bold px-2 py-0.5 rounded-md border transition-colors cursor-pointer flex items-center gap-1 ${
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1 ${
                           inCart.additionValue && inCart.additionValue > 0
                             ? 'bg-blue-50 text-blue-700 border-blue-200'
                             : inCart.discountValue > 0
@@ -1957,7 +1957,7 @@ export const ExternalSalesView: React.FC = () => {
                         }`}
                         title="Ajustar desconto ou acréscimo neste produto"
                       >
-                        <Tag size={10} />
+                        <Tag size={12} />
                         <span>
                           {inCart.additionValue && inCart.additionValue > 0
                             ? `+Acrésc: ${formatCurrency(inCart.additionValue)}`
@@ -1971,9 +1971,9 @@ export const ExternalSalesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleAddToCart(p)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl shadow-xs flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm px-4 py-3 rounded-2xl shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors active:scale-95"
                     >
-                      <Plus size={14} />
+                      <Plus size={16} />
                       <span>Adicionar</span>
                     </button>
                   )}
@@ -2012,24 +2012,24 @@ export const ExternalSalesView: React.FC = () => {
       {/* ABA PRINCIPAL 3: FECHAMENTO DO PEDIDO / CARRINHO                          */}
       {/* ========================================================================= */}
       {activeTab === 'carrinho' && (
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-            <h3 className="font-black text-xs uppercase text-slate-800 tracking-wider">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            <h3 className="font-black text-sm sm:text-base uppercase text-slate-800 tracking-wider">
               {docType === 'orcamento' ? 'Orçamento Comercial Externo' : 'Pedido de Venda Direta Externa'}
             </h3>
-            <span className="text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full uppercase">
+            <span className="text-xs font-black bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full uppercase">
               {docType}
             </span>
           </div>
 
           {/* Selecionar Cliente */}
           <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-xs font-bold text-slate-700">Cliente *</label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-sm font-extrabold text-slate-800">Cliente *</label>
               <button
                 type="button"
                 onClick={() => setActiveTab('novo_cliente')}
-                className="text-[11px] text-emerald-700 font-bold hover:underline cursor-pointer"
+                className="text-xs sm:text-sm text-emerald-700 font-extrabold hover:underline cursor-pointer py-0.5"
               >
                 + Cadastrar Novo
               </button>
@@ -2037,7 +2037,7 @@ export const ExternalSalesView: React.FC = () => {
             <select
               value={selectedCustomerId}
               onChange={(e) => setSelectedCustomerId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500 truncate"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm sm:text-base font-bold text-slate-800 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 truncate shadow-2xs"
             >
               <option value="">Selecione o cliente atendido...</option>
               {customers.map((c) => (
@@ -2050,14 +2050,14 @@ export const ExternalSalesView: React.FC = () => {
 
           {/* Depósito de Saída */}
           <div>
-            <label className="text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
-              <Warehouse size={13} className="text-emerald-700" />
+            <label className="text-sm font-extrabold text-slate-800 mb-1.5 flex items-center gap-1.5">
+              <Warehouse size={15} className="text-emerald-700" />
               <span>Depósito de Saída (Padrão: Comercial)</span>
             </label>
             <select
               value={selectedLocationId}
               onChange={(e) => setSelectedLocationId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500 truncate"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm sm:text-base font-bold text-slate-800 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 truncate shadow-2xs"
             >
               {locations.map((loc) => (
                 <option key={loc.id} value={loc.id}>
@@ -2068,39 +2068,41 @@ export const ExternalSalesView: React.FC = () => {
           </div>
 
           {/* Grade de Itens Selecionados */}
-          <div className="space-y-2">
-            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
+          <div className="space-y-2.5">
+            <span className="text-xs sm:text-sm font-black text-slate-600 uppercase tracking-wider block">
               Itens do Pedido ({cart.length} itens • {cart.reduce((s, i) => s + i.quantity, 0)} volumes)
             </span>
             {cart.length === 0 ? (
-              <p className="text-xs text-slate-400 py-4 text-center">Nenhum item adicionado ainda.</p>
+              <p className="text-sm text-slate-400 py-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                Nenhum item adicionado ainda ao pedido.
+              </p>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 bg-slate-50/50 rounded-2xl border border-slate-100 px-3 py-1">
                 {cart.map((item) => (
-                  <div key={item.id} className="py-2.5 flex items-center justify-between gap-2">
+                  <div key={item.id} className="py-3 flex items-center justify-between gap-2.5 flex-wrap">
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-extrabold text-slate-900 leading-snug truncate flex items-center gap-1.5 flex-wrap">
+                      <div className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug flex items-center gap-1.5 flex-wrap">
                         <span>{item.description}</span>
                         {item.isMasterPack && (
-                          <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-900 font-extrabold px-1.5 py-0.2 rounded border border-amber-300">
-                            <Boxes size={10} className="text-amber-700" />
+                          <span className="inline-flex items-center gap-1 text-[11px] bg-amber-100 text-amber-900 font-extrabold px-2 py-0.5 rounded-md border border-amber-300">
+                            <Boxes size={12} className="text-amber-700" />
                             Master ({item.masterPackUnits} un/{item.unit})
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] text-slate-400 font-mono">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-xs sm:text-sm text-slate-500 font-mono font-medium">
                           {formatCurrency(item.unitPrice)} x {item.quantity} {item.unit}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleOpenItemAdjustment(item)}
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                          className={`text-xs font-bold px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
                             item.additionValue && item.additionValue > 0
                               ? 'bg-blue-50 text-blue-800 border-blue-300'
                               : item.discountValue > 0
                               ? 'bg-amber-50 text-amber-800 border-amber-300'
-                              : 'text-slate-500 bg-slate-50 border-slate-200 hover:bg-slate-100'
+                              : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-100'
                           }`}
                           title="Ajustar desconto ou acréscimo neste item"
                         >
@@ -2113,25 +2115,25 @@ export const ExternalSalesView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleUpdateQty(item.productId, -1)}
-                        className="w-6 h-6 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center justify-center text-xs font-bold cursor-pointer"
+                        className="w-8 h-8 sm:w-9 sm:h-9 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl flex items-center justify-center text-sm font-bold cursor-pointer shadow-2xs active:scale-95 transition-all"
                       >
-                        <Minus size={12} />
+                        <Minus size={14} />
                       </button>
-                      <span className="w-5 text-center text-xs font-black font-mono">{item.quantity}</span>
+                      <span className="w-7 text-center text-sm font-black font-mono">{item.quantity}</span>
                       <button
                         type="button"
                         onClick={() => handleUpdateQty(item.productId, 1)}
-                        className="w-6 h-6 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center justify-center text-xs font-bold cursor-pointer"
+                        className="w-8 h-8 sm:w-9 sm:h-9 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl flex items-center justify-center text-sm font-bold cursor-pointer shadow-2xs active:scale-95 transition-all"
                       >
-                        <Plus size={12} />
+                        <Plus size={14} />
                       </button>
                     </div>
 
-                    <div className="font-black text-xs text-slate-900 min-w-[70px] text-right font-mono">
+                    <div className="font-black text-sm sm:text-base text-slate-900 min-w-[80px] text-right font-mono">
                       {formatCurrency(item.totalPrice)}
                     </div>
                   </div>
@@ -2141,14 +2143,14 @@ export const ExternalSalesView: React.FC = () => {
           </div>
 
           {/* Condições Comerciais */}
-          <div className="space-y-2.5 pt-2 border-t border-slate-100">
-            <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="space-y-3 pt-3 border-t border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-600 font-bold mb-1">Forma de Pagto:</label>
+                <label className="block text-sm font-extrabold text-slate-800 mb-1.5">Forma de Pagto:</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-800"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm sm:text-base font-bold text-slate-800 shadow-2xs"
                 >
                   <option value="pix">Pix Cobrança</option>
                   <option value="dinheiro">Dinheiro</option>
@@ -2158,13 +2160,13 @@ export const ExternalSalesView: React.FC = () => {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1 gap-1 flex-wrap">
+                <div className="flex items-center justify-between mb-1.5 gap-1 flex-wrap">
                   {/* Seletor Desconto ou Acréscimo no mesmo campo */}
-                  <div className="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200">
+                  <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200">
                     <button
                       type="button"
                       onClick={() => setGlobalAdjustmentMode('desconto')}
-                      className={`px-2 py-0.5 text-[11px] font-bold rounded cursor-pointer transition-all ${
+                      className={`px-3 py-1 text-xs font-black rounded-lg cursor-pointer transition-all ${
                         globalAdjustmentMode === 'desconto'
                           ? 'bg-amber-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
@@ -2175,7 +2177,7 @@ export const ExternalSalesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setGlobalAdjustmentMode('acrescimo')}
-                      className={`px-2 py-0.5 text-[11px] font-bold rounded cursor-pointer transition-all ${
+                      className={`px-3 py-1 text-xs font-black rounded-lg cursor-pointer transition-all ${
                         globalAdjustmentMode === 'acrescimo'
                           ? 'bg-blue-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
@@ -2186,11 +2188,11 @@ export const ExternalSalesView: React.FC = () => {
                   </div>
 
                   {/* Alternador % / R$ */}
-                  <div className="inline-flex rounded-md bg-slate-200 p-0.5 border border-slate-300">
+                  <div className="inline-flex rounded-lg bg-slate-200 p-0.5 border border-slate-300">
                     <button
                       type="button"
                       onClick={() => handleDiscountTypeChange('percent')}
-                      className={`px-2 py-0.5 text-xs font-bold rounded cursor-pointer transition-all ${
+                      className={`px-2.5 py-1 text-xs font-black rounded-md cursor-pointer transition-all ${
                         discountType === 'percent'
                           ? globalAdjustmentMode === 'acrescimo' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-emerald-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
@@ -2201,7 +2203,7 @@ export const ExternalSalesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleDiscountTypeChange('value')}
-                      className={`px-2 py-0.5 text-xs font-bold rounded cursor-pointer transition-all ${
+                      className={`px-2.5 py-1 text-xs font-black rounded-md cursor-pointer transition-all ${
                         discountType === 'value'
                           ? globalAdjustmentMode === 'acrescimo' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-emerald-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
@@ -2214,7 +2216,7 @@ export const ExternalSalesView: React.FC = () => {
 
                 <div className="relative flex items-center">
                   {discountType === 'value' && (
-                    <span className="absolute left-2.5 text-xs font-bold text-slate-500">R$</span>
+                    <span className="absolute left-3 text-sm font-bold text-slate-500">R$</span>
                   )}
                   <input
                     type="text"
@@ -2222,15 +2224,15 @@ export const ExternalSalesView: React.FC = () => {
                     value={discountInput}
                     onChange={(e) => setDiscountInput(e.target.value.replace(/[^0-9.,]/g, ''))}
                     placeholder="0"
-                    className={`w-full bg-slate-50 border rounded-xl p-2 font-bold text-right text-xs focus:outline-hidden focus:bg-white focus:ring-1 ${
+                    className={`w-full bg-slate-50 border rounded-xl p-3 font-bold text-right text-sm sm:text-base focus:outline-hidden focus:bg-white focus:ring-2 shadow-2xs ${
                       globalAdjustmentMode === 'acrescimo'
                         ? 'border-blue-300 focus:ring-blue-500'
                         : 'border-slate-200 focus:ring-emerald-500'
-                    } ${discountType === 'value' ? 'pl-8' : ''}`}
+                    } ${discountType === 'value' ? 'pl-9' : ''}`}
                   />
                 </div>
                 {parsedCartAdjustmentNum > 0 && (
-                  <div className="text-[10px] text-right font-semibold mt-1">
+                  <div className="text-xs text-right font-semibold mt-1">
                     {globalAdjustmentMode === 'desconto' ? (
                       <span className="text-amber-700 font-bold">- Desconto Geral: {formatCurrency(cartGlobalDiscount)}</span>
                     ) : (
@@ -2242,20 +2244,20 @@ export const ExternalSalesView: React.FC = () => {
             </div>
 
             {paymentMethod === 'boleto' && (
-              <div className="bg-amber-50/70 p-2.5 rounded-xl border border-amber-200 space-y-1">
-                <label className="block text-xs text-amber-900 font-bold mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Barcode size={13} className="text-amber-700" />
+              <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200 space-y-1.5">
+                <label className="block text-xs sm:text-sm text-amber-900 font-extrabold mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Barcode size={15} className="text-amber-700" />
                     Conta / Banco Emissor do Boleto:
                   </span>
-                  <span className="text-[10px] text-amber-700 font-semibold bg-amber-100 px-1.5 py-0.2 rounded">
+                  <span className="text-xs text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-full">
                     Cobrança
                   </span>
                 </label>
                 <select
                   value={selectedBoletoAccountId}
                   onChange={(e) => setSelectedBoletoAccountId(e.target.value)}
-                  className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-bold text-slate-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                  className="w-full bg-white border border-amber-300 rounded-xl p-3 text-sm sm:text-base font-bold text-slate-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 >
                   {Database.getBoletoAccounts(currentCompany.id).map((acc) => (
                     <option key={acc.id} value={acc.id}>
@@ -2268,13 +2270,13 @@ export const ExternalSalesView: React.FC = () => {
 
             {(paymentMethod === 'cartao_credito' || paymentMethod === 'boleto') && (
               <div>
-                <label className="block text-xs text-slate-600 font-bold mb-1">
+                <label className="block text-sm font-extrabold text-slate-800 mb-1.5">
                   {paymentMethod === 'boleto' ? 'Parcelas Boleto:' : 'Parcelas:'}
                 </label>
                 <select
                   value={installments}
                   onChange={(e) => setInstallments(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm sm:text-base font-bold text-slate-800 shadow-2xs"
                 >
                   {[1, 2, 3, 4, 5, 6].map((n) => (
                     <option key={n} value={n}>
@@ -2286,38 +2288,38 @@ export const ExternalSalesView: React.FC = () => {
             )}
 
             <div>
-              <label className="block text-xs text-slate-600 font-bold mb-1">Observações da Entrega:</label>
+              <label className="block text-sm font-extrabold text-slate-800 mb-1.5">Observações da Entrega:</label>
               <input
                 type="text"
                 placeholder="Ex: Entregar pela manhã, deixar com responsável..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm sm:text-base font-medium shadow-2xs focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
 
           {/* Resumo e Botão de Confirmação */}
-          <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-white p-4 rounded-xl space-y-1.5 border border-slate-800">
-            <div className="flex justify-between text-xs text-slate-400 font-mono">
+          <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-white p-4 sm:p-5 rounded-2xl space-y-2 border border-slate-800">
+            <div className="flex justify-between text-xs sm:text-sm text-slate-400 font-mono">
               <span>Subtotal Itens:</span>
               <span>{formatCurrency(cartSubtotal)}</span>
             </div>
             {cartGlobalDiscount > 0 && (
-              <div className="flex justify-between text-xs text-rose-400 font-mono">
+              <div className="flex justify-between text-xs sm:text-sm text-rose-400 font-mono">
                 <span>Desconto Geral:</span>
                 <span>-{formatCurrency(cartGlobalDiscount)}</span>
               </div>
             )}
             {cartGlobalAddition > 0 && (
-              <div className="flex justify-between text-xs text-blue-400 font-mono">
+              <div className="flex justify-between text-xs sm:text-sm text-blue-400 font-mono">
                 <span>Acréscimo Geral:</span>
                 <span>+{formatCurrency(cartGlobalAddition)}</span>
               </div>
             )}
-            <div className="flex justify-between text-base font-black pt-2 border-t border-slate-800">
+            <div className="flex justify-between text-base sm:text-lg font-black pt-2.5 border-t border-slate-800 items-baseline">
               <span className="text-slate-300">TOTAL DO PEDIDO:</span>
-              <span className="text-emerald-400 font-mono text-xl">{formatCurrency(cartTotal)}</span>
+              <span className="text-emerald-400 font-mono text-xl sm:text-2xl">{formatCurrency(cartTotal)}</span>
             </div>
           </div>
 
@@ -2325,9 +2327,9 @@ export const ExternalSalesView: React.FC = () => {
             type="button"
             disabled={cart.length === 0 || !selectedCustomerId}
             onClick={handleFinalizeExternalOrder}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-sm py-3.5 rounded-xl shadow-lg shadow-emerald-950/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-sm sm:text-base py-4 px-4 rounded-2xl shadow-lg shadow-emerald-950/20 flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-98"
           >
-            <Send size={18} />
+            <Send size={20} />
             <span>
               {docType === 'orcamento' ? 'GERAR E COMPARTILHAR ORÇAMENTO' : 'CONFIRMAR PEDIDO DE VENDA'}
             </span>
@@ -2339,67 +2341,67 @@ export const ExternalSalesView: React.FC = () => {
       {/* ABA PRINCIPAL 4: CADASTRO RÁPIDO DE NOVO CLIENTE NA RUA                  */}
       {/* ========================================================================= */}
       {activeTab === 'novo_cliente' && (
-        <form onSubmit={handleSaveQuickCustomer} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-          <div className="pb-2 border-b border-slate-100 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
-              <UserPlus size={16} />
+        <form onSubmit={handleSaveQuickCustomer} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="pb-3 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+              <UserPlus size={20} />
             </div>
             <div>
-              <h3 className="font-black text-xs uppercase text-slate-800 tracking-wider">Cadastro Rápido de Cliente (Na Rua)</h3>
-              <p className="text-[11px] text-slate-400">Cadastre o cliente para vincular imediatamente ao pedido</p>
+              <h3 className="font-black text-sm sm:text-base uppercase text-slate-800 tracking-wider">Cadastro Rápido de Cliente (Na Rua)</h3>
+              <p className="text-xs text-slate-400">Cadastre o cliente para vincular imediatamente ao pedido</p>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Nome Completo ou Razão Social *</label>
+            <label className="block text-sm font-extrabold text-slate-800 mb-1.5">Nome Completo ou Razão Social *</label>
             <input
               type="text"
               required
               value={newClientName}
               onChange={(e) => setNewClientName(e.target.value)}
               placeholder="Ex: Mercadinho São Pedro"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500"
+              className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base font-medium focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-2xs"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Telefone / WhatsApp *</label>
+              <label className="block text-sm font-extrabold text-slate-800 mb-1.5">Telefone / WhatsApp *</label>
               <input
                 type="text"
                 required
                 value={newClientPhone}
                 onChange={(e) => setNewClientPhone(e.target.value)}
                 placeholder="(11) 98765-4321"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base font-medium focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-2xs"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">CPF ou CNPJ</label>
+              <label className="block text-sm font-extrabold text-slate-800 mb-1.5">CPF ou CNPJ</label>
               <input
                 type="text"
                 value={newClientCpfCnpj}
                 onChange={(e) => setNewClientCpfCnpj(e.target.value)}
                 placeholder="Opcional"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base font-medium focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-2xs"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Cidade</label>
+            <label className="block text-sm font-extrabold text-slate-800 mb-1.5">Cidade</label>
             <input
               type="text"
               value={newClientCity}
               onChange={(e) => setNewClientCity(e.target.value)}
               placeholder="São Paulo"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden focus:bg-white focus:ring-1 focus:ring-emerald-500"
+              className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base font-medium focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-2xs"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-3.5 rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm sm:text-base py-4 rounded-2xl shadow-xs transition-colors cursor-pointer active:scale-98"
           >
             Salvar Cliente e Voltar ao Pedido
           </button>

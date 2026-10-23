@@ -17,6 +17,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { Database } from '../../services/db';
+import { CashRegister } from './icons/CashRegisterIcon';
 
 export interface ShortcutItem {
   id: string;
@@ -48,7 +49,7 @@ export const SYSTEM_SHORTCUTS: ShortcutItem[] = [
     description: 'Abrir PDV Balcão (ou Consulta Rápida se já estiver no PDV)',
     actionText: 'Abrir PDV Balcão',
     targetModule: 'pos',
-    icon: <ShoppingCart size={15} />,
+    icon: <CashRegister size={15} />,
     color: 'text-emerald-700 bg-emerald-50 border-emerald-300',
   },
   {
@@ -196,7 +197,7 @@ export const GlobalShortcutsModal: React.FC<GlobalShortcutsModalProps> = ({
         description: 'Tela Inicial: PDV Balcão (Frente de Caixa)',
         actionText: 'Ir para PDV Balcão',
         targetModule: 'pos',
-        icon: <ShoppingCart size={15} />,
+        icon: <CashRegister size={15} />,
         color: 'text-emerald-700 bg-emerald-50 border-emerald-300',
       };
     }

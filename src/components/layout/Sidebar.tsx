@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { toast } from '../../services/toast';
+import { CashRegister } from '../common/icons/CashRegisterIcon';
 
 interface SidebarProps {
   currentModule: string;
@@ -110,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'inicio',
       label: isBalconista ? 'PDV Balcão' : 'Início',
-      icon: isBalconista ? <ShoppingCart size={18} /> : <Home size={18} />,
+      icon: isBalconista ? <CashRegister size={18} /> : <Home size={18} />,
       defaultModule: isBalconista ? 'pos' : 'dashboard',
       shortcut: isBalconista ? 'F2' : 'F10',
     },

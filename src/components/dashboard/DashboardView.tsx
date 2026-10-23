@@ -39,6 +39,7 @@ import { Database } from '../../services/db';
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { Order, Product } from '../../types';
+import { CashRegister } from '../common/icons/CashRegisterIcon';
 
 interface DashboardViewProps {
   onNavigate: (module: string) => void;
@@ -72,7 +73,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onClick={() => onNavigate('pos')}
           className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
         >
-          <ShoppingCart size={16} />
+          <CashRegister size={16} />
           <span>Abrir PDV Balcão</span>
         </button>
       </div>
@@ -557,7 +558,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             title="Abrir PDV Balcão [F2]"
           >
-            <ShoppingCart size={15} />
+            <CashRegister size={15} />
             <span>PDV Balcão</span>
             <kbd className="font-mono text-[10px] bg-emerald-700/90 text-emerald-100 px-1.5 py-0.2 rounded border border-emerald-500/60">
               F2
@@ -565,23 +566,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
           <button
             onClick={() => onNavigate('orders')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             title="Módulo de Pedido de Venda & Orçamentos [F3]"
           >
             <ClipboardList size={15} />
             <span>Pedido de Venda</span>
-            <kbd className="font-mono text-[10px] bg-blue-700/90 text-blue-100 px-1.5 py-0.2 rounded border border-blue-500/60">
+            <kbd className="font-mono text-[10px] bg-teal-700/90 text-teal-100 px-1.5 py-0.2 rounded border border-teal-500/60">
               F3
             </kbd>
           </button>
           <button
             onClick={() => onNavigate('external_sales')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             title="Força de Vendas Mobile [F7]"
           >
             <Smartphone size={15} />
             <span>Venda Mobile</span>
-            <kbd className="font-mono text-[10px] bg-blue-700/90 text-blue-100 px-1.5 py-0.2 rounded border border-blue-500/60">
+            <kbd className="font-mono text-[10px] bg-green-700/90 text-green-100 px-1.5 py-0.2 rounded border border-green-500/60">
               F7
             </kbd>
           </button>
