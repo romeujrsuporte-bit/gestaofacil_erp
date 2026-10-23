@@ -31,7 +31,9 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return Database.isSessionAuthenticated();
   });
-  const [currentModule, setCurrentModule] = useState<string>('dashboard');
+  const [currentModule, setCurrentModule] = useState<string>(() => {
+    return Database.getDefaultModuleForCurrentUser();
+  });
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [sidebarMinimized, setSidebarMinimized] = useState<boolean>(() => {
     return localStorage.getItem('omni_sidebar_minimized') === 'true';
@@ -51,9 +53,33 @@ export default function App() {
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
 
+  // Callback ao autenticar no sistema
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
+    const initialMod = Database.getDefaultModuleForCurrentUser();
+    setCurrentModule(initialMod);
+    if (initialMod === 'pos') {
+      setSidebarMinimized(true);
+      setHideDashboardKpis(true);
+    }
+  };
+
   // Navegação central com proteção contra perda de dados no PDV
   const navigateTo = (targetModule: string) => {
     if (targetModule === currentModule) return;
+
+    // Regra solicitada: Balconista de PDV não terá acesso nem visualizará a tela inicial atual (Dashboard com faturamento)
+    // A tela inicial do Balconista é o PDV Balcão
+    if (Database.isBalconista() && targetModule === 'dashboard') {
+      toast.warning(
+        'Acesso restrito: o perfil "Balconista de PDV" tem como tela inicial o PDV Balcão e não possui acesso aos indicadores gerais de faturamento da empresa.',
+        'Tela Inicial: PDV Balcão'
+      );
+      if (currentModule !== 'pos') {
+        setCurrentModule('pos');
+      }
+      return;
+    }
 
     // Regra solicitada: apenas o usuário 'admin' poderá utilizar os submenus 'Empresa, Usuários & Auditoria', 'Menu do Sistema' e 'Banco Supabase'
     if (!Database.isAdmin() && (targetModule === 'settings' || targetModule === 'settings_menus' || targetModule === 'settings_supabase')) {
@@ -134,7 +160,11 @@ export default function App() {
     Database.load();
     const unsubscribe = Database.subscribe(() => {
       setDbVersion((v) => v + 1);
-      setIsAuthenticated(Database.isSessionAuthenticated());
+      const authenticated = Database.isSessionAuthenticated();
+      setIsAuthenticated(authenticated);
+      if (authenticated && Database.isBalconista()) {
+        setCurrentModule((prev) => (prev === 'dashboard' ? 'pos' : prev));
+      }
     });
 
     // Inicialização da sincronização centralizada em tempo real com o Supabase
@@ -255,10 +285,10 @@ export default function App() {
           navigateTo('orders_history');
         }
       }
-      // F10: Painel de Controle / Dashboard Inicial
+      // F10: Tela Inicial (PDV Balcão para Balconista; Dashboard para outros perfis)
       else if (e.key === 'F10') {
         e.preventDefault();
-        navigateTo('dashboard');
+        navigateTo(Database.getDefaultModuleForCurrentUser());
       }
     };
 
@@ -275,6 +305,20 @@ export default function App() {
   }, [currentModule]);
 
   const renderModule = () => {
+    // Verificação de segurança: se o usuário for balconista e tentar visualizar dashboard, substituir por PDV Balcão
+    if (Database.isBalconista() && currentModule === 'dashboard') {
+      return (
+        <PosView
+          isSidebarMinimized={sidebarMinimized}
+          onToggleSidebarMinimize={handleToggleSidebarMinimize}
+          hideDashboardKpis={hideDashboardKpis}
+          onToggleDashboardKpis={handleToggleDashboardKpis}
+          cart={posCart}
+          setCart={setPosCart}
+        />
+      );
+    }
+
     // Verificação de segurança: se o usuário não for admin, bloquear acesso a módulos restritos
     if (!Database.isAdmin()) {
       if (currentModule === 'settings' || currentModule === 'settings_menus' || currentModule === 'settings_supabase') {
@@ -288,7 +332,7 @@ export default function App() {
               Apenas o usuário "admin" tem autorização para acessar as configurações de empresas, usuários, banco de dados e menus.
             </p>
             <button
-              onClick={() => setCurrentModule('dashboard')}
+              onClick={() => setCurrentModule(Database.getDefaultModuleForCurrentUser())}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               Voltar ao Início
@@ -310,7 +354,7 @@ export default function App() {
               Seu perfil de usuário não possui permissão concedida pelo administrador para visualizar ou utilizar este menu/módulo.
             </p>
             <button
-              onClick={() => setCurrentModule('dashboard')}
+              onClick={() => setCurrentModule(Database.getDefaultModuleForCurrentUser())}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               Voltar ao Início
@@ -415,6 +459,18 @@ export default function App() {
       case 'settings_preferences':
         return <SettingsView initialTab="preferencias" />;
       default:
+        if (Database.isBalconista()) {
+          return (
+            <PosView
+              isSidebarMinimized={sidebarMinimized}
+              onToggleSidebarMinimize={handleToggleSidebarMinimize}
+              hideDashboardKpis={hideDashboardKpis}
+              onToggleDashboardKpis={handleToggleDashboardKpis}
+              cart={posCart}
+              setCart={setPosCart}
+            />
+          );
+        }
         return <DashboardView onNavigate={navigateTo} />;
     }
   };
@@ -422,7 +478,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <>
-        <LoginView onLoginSuccess={() => setIsAuthenticated(true)} />
+        <LoginView onLoginSuccess={handleLoginSuccess} />
         <ToastContainer />
       </>
     );

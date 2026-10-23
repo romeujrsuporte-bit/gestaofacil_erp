@@ -77,12 +77,17 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    Database.setCurrentUser(e.target.value);
+    const selectedUserId = e.target.value;
+    Database.setCurrentUser(selectedUserId);
+    const targetUser = dbState.users.find((u) => u.id === selectedUserId);
+    if (targetUser && targetUser.role === 'balconista') {
+      onNavigate('pos');
+    }
     Database.addAuditLog(
       'TROCA_PERFIL_USUARIO',
       'SEGURANCA',
-      e.target.value,
-      `Sessão simulada alterada para usuário ID: ${e.target.value}`
+      selectedUserId,
+      `Sessão simulada alterada para usuário ID: ${selectedUserId}`
     );
   };
 
@@ -110,8 +115,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div
           className="flex items-center gap-2 cursor-pointer select-none"
-          onClick={() => onNavigate('dashboard')}
-          title="Ir para o Painel Inicial"
+          onClick={() => onNavigate(Database.getDefaultModuleForCurrentUser())}
+          title={currentUser.role === 'balconista' ? 'Ir para o PDV Balcão (Tela Inicial)' : 'Ir para o Painel Inicial'}
         >
           <GestaoFacilLogo size={36} showSlogan={true} />
         </div>

@@ -902,7 +902,6 @@ export const DEFAULT_ROLE_SUB_ITEMS: Record<UserRole, string[]> = {
     'settings_printer',
   ],
   balconista: [
-    'dashboard',
     'pos',
     'orders',
     'orders_quotes',
@@ -1571,43 +1570,59 @@ export class Database {
               const menuDefaults = DEFAULT_ROLE_MENU_SECTIONS[role] || DEFAULT_ROLE_MENU_SECTIONS.balconista;
               const subItemDefaults = DEFAULT_ROLE_SUB_ITEMS[role] || DEFAULT_ROLE_SUB_ITEMS.balconista;
 
+              let allowedSubs = u.permissions.allowedSubItems || (u.login === 'admin' ? undefined : [...subItemDefaults]);
+              if (role === 'balconista' && allowedSubs) {
+                allowedSubs = allowedSubs.filter((item) => item !== 'dashboard');
+                if (!allowedSubs.includes('pos')) {
+                  allowedSubs.unshift('pos');
+                }
+              }
+
+              const isBalconista = role === 'balconista';
+
               const perms: UserPermissions = {
                 ...u.permissions,
-                canViewGrossProfit:
+                canViewGrossProfit: isBalconista ? false : (
                   u.permissions.canViewGrossProfit !== undefined
                     ? u.permissions.canViewGrossProfit
-                    : finDefaults.canViewGrossProfit,
-                canViewNetProfit:
+                    : finDefaults.canViewGrossProfit
+                ),
+                canViewNetProfit: isBalconista ? false : (
                   u.permissions.canViewNetProfit !== undefined
                     ? u.permissions.canViewNetProfit
-                    : finDefaults.canViewNetProfit,
-                canViewTotalRevenue:
+                    : finDefaults.canViewNetProfit
+                ),
+                canViewTotalRevenue: isBalconista ? false : (
                   u.permissions.canViewTotalRevenue !== undefined
                     ? u.permissions.canViewTotalRevenue
-                    : finDefaults.canViewTotalRevenue,
-                canViewProfitMargin:
+                    : finDefaults.canViewTotalRevenue
+                ),
+                canViewProfitMargin: isBalconista ? false : (
                   u.permissions.canViewProfitMargin !== undefined
                     ? u.permissions.canViewProfitMargin
-                    : finDefaults.canViewProfitMargin,
-                canViewProductCosts:
+                    : finDefaults.canViewProfitMargin
+                ),
+                canViewProductCosts: isBalconista ? false : (
                   u.permissions.canViewProductCosts !== undefined
                     ? u.permissions.canViewProductCosts
-                    : (u.permissions.canViewCosts ?? finDefaults.canViewProductCosts),
-                canViewCashBalances:
+                    : (u.permissions.canViewCosts ?? finDefaults.canViewProductCosts)
+                ),
+                canViewCashBalances: isBalconista ? false : (
                   u.permissions.canViewCashBalances !== undefined
                     ? u.permissions.canViewCashBalances
-                    : finDefaults.canViewCashBalances,
+                    : finDefaults.canViewCashBalances
+                ),
                 allowedMenuSections:
                   u.permissions.allowedMenuSections || (u.login === 'admin' ? undefined : [...menuDefaults]),
-                allowedSubItems:
-                  u.permissions.allowedSubItems || (u.login === 'admin' ? undefined : [...subItemDefaults]),
+                allowedSubItems: allowedSubs,
               };
 
               if (
                 u.permissions.canViewGrossProfit === undefined ||
                 u.permissions.canViewNetProfit === undefined ||
                 !u.permissions.allowedMenuSections ||
-                !u.password
+                !u.password ||
+                (isBalconista && u.permissions.allowedSubItems?.includes('dashboard'))
               ) {
                 updated = true;
               }
@@ -2079,11 +2094,30 @@ export class Database {
     return u?.login === 'admin';
   }
 
+  public static isBalconista(user?: User): boolean {
+    const u = user || this.getCurrentUser();
+    return u?.role === 'balconista';
+  }
+
+  public static getDefaultModuleForCurrentUser(user?: User): string {
+    const u = user || this.getCurrentUser();
+    if (u && u.role === 'balconista') {
+      return 'pos';
+    }
+    return 'dashboard';
+  }
+
   public static canCurrentUserView(
     metric: 'grossProfit' | 'netProfit' | 'totalRevenue' | 'profitMargin' | 'productCosts' | 'cashBalances'
   ): boolean {
     const user = this.getCurrentUser();
     if (user.login === 'admin') return true;
+
+    // Regra solicitada: Balconista de PDV não deve ter acesso a números de vendas totais, lucros ou custos da empresa
+    if (user.role === 'balconista') {
+      return false;
+    }
+
     const perms = user.permissions;
     const role = user.role || 'balconista';
     const finDefaults = DEFAULT_ROLE_FINANCIAL_PERMISSIONS[role] || DEFAULT_ROLE_FINANCIAL_PERMISSIONS.balconista;
@@ -2127,6 +2161,11 @@ export class Database {
     if (user.login === 'admin') return true;
     if (subItemId === 'settings' || subItemId === 'settings_menus' || subItemId === 'settings_supabase') {
       return false; // Apenas o admin master
+    }
+
+    // Regra: Balconista de PDV tem como tela inicial o PDV Balcão e NÃO pode visualizar/acessar o Dashboard com indicadores
+    if (subItemId === 'dashboard' && user.role === 'balconista') {
+      return false;
     }
 
     if (Array.isArray(user.permissions.allowedSubItems)) {

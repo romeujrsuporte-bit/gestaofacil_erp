@@ -16,6 +16,7 @@ import {
   Scale,
   ClipboardList
 } from 'lucide-react';
+import { Database } from '../../services/db';
 
 export interface ShortcutItem {
   id: string;
@@ -186,7 +187,23 @@ export const GlobalShortcutsModal: React.FC<GlobalShortcutsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredShortcuts = SYSTEM_SHORTCUTS.filter((item) => {
+  const isBalconista = Database.isBalconista();
+
+  const adjustedShortcuts = SYSTEM_SHORTCUTS.map((item) => {
+    if (isBalconista && item.id === 'f10-dashboard') {
+      return {
+        ...item,
+        description: 'Tela Inicial: PDV Balcão (Frente de Caixa)',
+        actionText: 'Ir para PDV Balcão',
+        targetModule: 'pos',
+        icon: <ShoppingCart size={15} />,
+        color: 'text-emerald-700 bg-emerald-50 border-emerald-300',
+      };
+    }
+    return item;
+  });
+
+  const filteredShortcuts = adjustedShortcuts.filter((item) => {
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
     const term = searchTerm.toLowerCase();
     const matchesSearch =

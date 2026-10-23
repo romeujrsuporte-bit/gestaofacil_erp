@@ -104,13 +104,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }));
   };
 
+  const isBalconista = currentUser?.role === 'balconista';
+
   const menuSections: MenuGroupItem[] = [
     {
       id: 'inicio',
-      label: 'Início',
-      icon: <Home size={18} />,
-      defaultModule: 'dashboard',
-      shortcut: 'F10',
+      label: isBalconista ? 'PDV Balcão' : 'Início',
+      icon: isBalconista ? <ShoppingCart size={18} /> : <Home size={18} />,
+      defaultModule: isBalconista ? 'pos' : 'dashboard',
+      shortcut: isBalconista ? 'F2' : 'F10',
     },
     {
       id: 'vendas',

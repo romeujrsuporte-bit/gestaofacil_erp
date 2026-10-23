@@ -659,19 +659,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
       },
     }[userRole];
 
+    const isBalconista = userRole === 'balconista';
+    const subDefaults = DEFAULT_ROLE_SUB_ITEMS[userRole] || DEFAULT_ROLE_SUB_ITEMS.balconista;
+    const menuDefaults = DEFAULT_ROLE_MENU_SECTIONS[userRole] || DEFAULT_ROLE_MENU_SECTIONS.balconista;
+    const finDefaults = DEFAULT_ROLE_FINANCIAL_PERMISSIONS[userRole] || DEFAULT_ROLE_FINANCIAL_PERMISSIONS.balconista;
+
     if (editingUser) {
-      state.users = state.users.map((u) =>
-        u.id === editingUser.id
-          ? {
-              ...u,
-              name: userName.trim(),
-              login: userLogin.trim(),
-              role: userRole,
-              password: u.password || (u.login === 'admin' ? 'admin' : '1234'),
-              permissions: { ...permissions, maxDiscountPercent: maxDisc },
-            }
-          : u
-      );
+      state.users = state.users.map((u) => {
+        if (u.id !== editingUser.id) return u;
+        const currentAllowedSubs = u.permissions.allowedSubItems || subDefaults;
+        const sanitizedSubs = isBalconista
+          ? currentAllowedSubs.filter((item) => item !== 'dashboard')
+          : currentAllowedSubs;
+
+        return {
+          ...u,
+          name: userName.trim(),
+          login: userLogin.trim(),
+          role: userRole,
+          password: u.password || (u.login === 'admin' ? 'admin' : '1234'),
+          permissions: {
+            ...permissions,
+            maxDiscountPercent: maxDisc,
+            canViewGrossProfit: isBalconista ? false : (u.permissions.canViewGrossProfit ?? finDefaults.canViewGrossProfit),
+            canViewNetProfit: isBalconista ? false : (u.permissions.canViewNetProfit ?? finDefaults.canViewNetProfit),
+            canViewTotalRevenue: isBalconista ? false : (u.permissions.canViewTotalRevenue ?? finDefaults.canViewTotalRevenue),
+            canViewProfitMargin: isBalconista ? false : (u.permissions.canViewProfitMargin ?? finDefaults.canViewProfitMargin),
+            canViewProductCosts: isBalconista ? false : (u.permissions.canViewProductCosts ?? finDefaults.canViewProductCosts),
+            canViewCashBalances: isBalconista ? false : (u.permissions.canViewCashBalances ?? finDefaults.canViewCashBalances),
+            allowedMenuSections: u.permissions.allowedMenuSections || [...menuDefaults],
+            allowedSubItems: sanitizedSubs,
+          },
+        };
+      });
       Database.addAuditLog('ATUALIZAR_USUARIO', 'CONFIGURACOES', editingUser.id, `Usuário ${userName} atualizado`);
     } else {
       const newUser: User = {
@@ -682,7 +702,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
         role: userRole,
         companyId: currentCompany.id,
         status: 'ativo',
-        permissions: { ...permissions, maxDiscountPercent: maxDisc },
+        permissions: {
+          ...permissions,
+          maxDiscountPercent: maxDisc,
+          canViewGrossProfit: isBalconista ? false : finDefaults.canViewGrossProfit,
+          canViewNetProfit: isBalconista ? false : finDefaults.canViewNetProfit,
+          canViewTotalRevenue: isBalconista ? false : finDefaults.canViewTotalRevenue,
+          canViewProfitMargin: isBalconista ? false : finDefaults.canViewProfitMargin,
+          canViewProductCosts: isBalconista ? false : finDefaults.canViewProductCosts,
+          canViewCashBalances: isBalconista ? false : finDefaults.canViewCashBalances,
+          allowedMenuSections: [...menuDefaults],
+          allowedSubItems: isBalconista ? subDefaults.filter((s) => s !== 'dashboard') : [...subDefaults],
+        },
       };
       state.users.push(newUser);
       Database.addAuditLog('CRIAR_USUARIO', 'CONFIGURACOES', newUser.id, `Usuário ${newUser.name} (${userRole}) cadastrado com senha padrão`);

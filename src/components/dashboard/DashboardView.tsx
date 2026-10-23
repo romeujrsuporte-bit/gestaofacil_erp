@@ -56,6 +56,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [dbState, setDbState] = useState(Database.getState());
   const currentCompany = Database.getCurrentCompany();
   const currentUser = Database.getCurrentUser();
+
+  // Guarda de segurança: Balconista de PDV não tem acesso nem visualiza o Dashboard com faturamento
+  if (currentUser?.role === 'balconista') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50 min-h-[70vh]">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mb-4 shadow-xs">
+          <Lock size={30} />
+        </div>
+        <h2 className="text-lg font-extrabold text-slate-800">Acesso Restrito ao PDV Balcão</h2>
+        <p className="text-xs text-slate-600 max-w-md mt-2 mb-5 leading-relaxed">
+          O perfil de acesso <strong>"Balconista de PDV"</strong> tem como tela inicial e exclusiva de trabalho o <strong>PDV Balcão</strong>, não possuindo autorização para visualizar os números gerais de faturamento e vendas da empresa.
+        </p>
+        <button
+          onClick={() => onNavigate('pos')}
+          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
+        >
+          <ShoppingCart size={16} />
+          <span>Abrir PDV Balcão</span>
+        </button>
+      </div>
+    );
+  }
   const canViewGrossProfit = Database.canCurrentUserView('grossProfit');
   const canViewNetProfit = Database.canCurrentUserView('netProfit');
   const canViewTotalRevenue = Database.canCurrentUserView('totalRevenue');
