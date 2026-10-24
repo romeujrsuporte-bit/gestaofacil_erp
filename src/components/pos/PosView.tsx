@@ -37,12 +37,14 @@ import {
   Calculator,
   Tag,
   Boxes,
+  Clock,
 } from 'lucide-react';
 import { Database } from '../../services/db';
 import { Product, Customer, Order, OrderItem, CashRegister } from '../../types';
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { ReceiptModal } from '../common/ReceiptModal';
+import { SaleConfirmationModal } from '../common/SaleConfirmationModal';
 import { CashRegisterIcon } from '../common/icons/CashRegisterIcon';
 import { toast } from '../../services/toast';
 
@@ -103,6 +105,8 @@ export const PosView: React.FC<PosViewProps> = ({
   };
 
   const [paymentMethod, setPaymentMethod] = useState<'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito' | 'boleto' | 'crediario'>('pix');
+  const [paymentTerm, setPaymentTerm] = useState<string>('a_vista');
+  const [showSaleConfirmationModal, setShowSaleConfirmationModal] = useState<boolean>(false);
   const [selectedBoletoAccountId, setSelectedBoletoAccountId] = useState<string>(() => {
     const boletoMethod = Database.getPaymentMethods().find((m) => m.type === 'boleto');
     if (boletoMethod?.defaultAccountId) return boletoMethod.defaultAccountId;
@@ -820,7 +824,7 @@ export const PosView: React.FC<PosViewProps> = ({
   // Atalhos de teclado
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showProductLookupModal || showReceiptModal || showOpenRegisterModal || cancellingOrderId || showQuickCustomerModal) {
+      if (showProductLookupModal || showReceiptModal || showOpenRegisterModal || cancellingOrderId || showQuickCustomerModal || showSaleConfirmationModal) {
         return;
       }
 
@@ -901,7 +905,7 @@ export const PosView: React.FC<PosViewProps> = ({
       } else if (e.key === 'F9') {
         e.preventDefault();
         if (cart.length > 0) {
-          handleFinalizeSale();
+          handlePreFinalizeSale();
         }
       } else if (e.key === 'Escape') {
         if (barcodeInput) {
@@ -917,10 +921,12 @@ export const PosView: React.FC<PosViewProps> = ({
     discountType,
     discountInput,
     paymentMethod,
+    paymentTerm,
     receivedAmount,
     selectedCustomerId,
     showProductLookupModal,
     showReceiptModal,
+    showSaleConfirmationModal,
     showQuickCustomerModal,
     showFractionalQtyModal,
     showItemDiscountModal,
@@ -985,8 +991,8 @@ export const PosView: React.FC<PosViewProps> = ({
     setShowQuickCustomerModal(false);
   };
 
-  // Finalizar Venda
-  const handleFinalizeSale = () => {
+  // Pré-finalizar venda no PDV Balcão (Validação de campos obrigatórios e abertura da tela de confirmação)
+  const handlePreFinalizeSale = () => {
     if (!activeCashRegister) {
       alert('É necessário ter um caixa aberto para registrar vendas.');
       setShowOpenRegisterModal(true);
@@ -995,6 +1001,16 @@ export const PosView: React.FC<PosViewProps> = ({
 
     if (cart.length === 0) {
       alert('Adicione pelo menos um produto antes de finalizar a venda.');
+      return;
+    }
+
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+
+    if (!paymentTerm || paymentTerm.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
       return;
     }
 
@@ -1007,6 +1023,35 @@ export const PosView: React.FC<PosViewProps> = ({
 
     if (paymentMethod === 'dinheiro' && numericReceived > 0 && numericReceived < total) {
       alert(`O valor em dinheiro informado (${formatCurrency(numericReceived)}) é menor que o total a pagar (${formatCurrency(total)}).`);
+      return;
+    }
+
+    // Abre a tela de confirmação com os dados solicitados
+    setShowSaleConfirmationModal(true);
+  };
+
+  // Finalizar Venda Efetivamente (gravação no banco após confirmação do usuário)
+  const handleFinalizeSale = () => {
+    setShowSaleConfirmationModal(false);
+
+    if (!activeCashRegister) {
+      alert('É necessário ter um caixa aberto para registrar vendas.');
+      setShowOpenRegisterModal(true);
+      return;
+    }
+
+    if (cart.length === 0) {
+      alert('Adicione pelo menos um produto antes de finalizar a venda.');
+      return;
+    }
+
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+
+    if (!paymentTerm || paymentTerm.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
       return;
     }
 
@@ -1075,6 +1120,7 @@ export const PosView: React.FC<PosViewProps> = ({
         status: 'concluido',
         stockDeducted: true,
         financialGenerated: true,
+        notes: `Prazo de Pagamento: ${paymentTerm.replace(/_/g, ' ').toUpperCase()}${installments > 1 ? ` (${installments}x)` : ''}`,
         createdAt: nowIso,
         updatedAt: nowIso,
       };
@@ -1935,7 +1981,12 @@ export const PosView: React.FC<PosViewProps> = ({
 
               {/* Seleção da Forma de Pagamento */}
               <div className="space-y-1">
-                <span className="text-[11px] font-bold text-slate-700 block">Forma de Pagamento:</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 block">Forma de Pagamento: *</span>
+                  <span className="text-[9px] font-black text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                    OBRIGATÓRIO
+                  </span>
+                </div>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-1">
                   {[
                     { id: 'pix', label: 'Pix', icon: <QrCode size={12} /> },
@@ -1960,6 +2011,32 @@ export const PosView: React.FC<PosViewProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Seleção do Prazo de Pagamento (Obrigatório em todas as modalidades) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <Clock size={12} className="text-amber-600" />
+                    <span>Prazo de Pagamento: *</span>
+                  </span>
+                  <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                    OBRIGATÓRIO
+                  </span>
+                </div>
+                <select
+                  value={paymentTerm}
+                  onChange={(e) => setPaymentTerm(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                >
+                  <option value="a_vista">À Vista / Imediato</option>
+                  <option value="15_dias">15 Dias Direto</option>
+                  <option value="30_dias">30 Dias Faturado</option>
+                  <option value="30_60_dias">30 / 60 Dias</option>
+                  <option value="30_60_90_dias">30 / 60 / 90 Dias</option>
+                  <option value="parcelado">Parcelado ({installments}x)</option>
+                  <option value="personalizado">Personalizado</option>
+                </select>
               </div>
 
               {/* Painel Específico: Dinheiro (Valor Recebido e Troco Ampliados, Harmônicos e com Botão Finalizar Fixo) */}
@@ -1990,7 +2067,7 @@ export const PosView: React.FC<PosViewProps> = ({
                             if (e.key === 'Enter') {
                               e.preventDefault();
                               if (cart.length > 0) {
-                                handleFinalizeSale();
+                                handlePreFinalizeSale();
                               }
                             }
                           }}
@@ -2122,7 +2199,7 @@ export const PosView: React.FC<PosViewProps> = ({
             <button
               type="button"
               disabled={cart.length === 0}
-              onClick={handleFinalizeSale}
+              onClick={handlePreFinalizeSale}
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-extrabold text-sm sm:text-base py-2.5 sm:py-3 rounded-xl shadow-md hover:shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 mt-1.5"
             >
               <CheckCircle2 size={18} />
@@ -3007,6 +3084,25 @@ export const PosView: React.FC<PosViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* MODAL: TELA DE CONFIRMAÇÃO DA VENDA (NOME DO CLIENTE, TOTAL, FORMA E PRAZO DE PAGTO) */}
+      <SaleConfirmationModal
+        isOpen={showSaleConfirmationModal}
+        onClose={() => setShowSaleConfirmationModal(false)}
+        onConfirm={handleFinalizeSale}
+        modality="PDV Balcão"
+        customerName={selectedCustomer ? selectedCustomer.name : 'Consumidor Final (Não Identificado)'}
+        customerDocument={selectedCustomer?.cpfCnpj}
+        customerPhone={selectedCustomer?.phone || selectedCustomer?.whatsapp}
+        totalAmount={total}
+        paymentMethod={paymentMethod}
+        paymentTerm={paymentTerm}
+        installments={installments}
+        itemsCount={cart.reduce((s, i) => s + i.quantity, 0)}
+        receivedAmount={paymentMethod === 'dinheiro' && numericReceived > 0 ? numericReceived : undefined}
+        changeAmount={change}
+        locationName={locations.find((l) => l.id === selectedLocationId)?.name || 'Comercial'}
+      />
 
       {/* MODAL: COMPROVANTE TÉRMICO / WHATSAPP */}
       {lastFinishedOrder && (

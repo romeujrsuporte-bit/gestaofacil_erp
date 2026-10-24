@@ -50,6 +50,7 @@ import { Product, Customer, Order, OrderItem } from '../../types';
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { ReceiptModal } from '../common/ReceiptModal';
+import { SaleConfirmationModal } from '../common/SaleConfirmationModal';
 import { toast } from '../../services/toast';
 
 export const ExternalSalesView: React.FC = () => {
@@ -133,6 +134,8 @@ export const ExternalSalesView: React.FC = () => {
   const [itemAdjustmentInput, setItemAdjustmentInput] = useState<string>('');
 
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'dinheiro' | 'cartao_credito' | 'boleto'>('pix');
+  const [paymentTerm, setPaymentTerm] = useState<string>('a_vista');
+  const [showSaleConfirmationModal, setShowSaleConfirmationModal] = useState<boolean>(false);
   const [selectedBoletoAccountId, setSelectedBoletoAccountId] = useState<string>(() => {
     const boletoMethod = Database.getPaymentMethods().find((m) => m.type === 'boleto');
     if (boletoMethod?.defaultAccountId) return boletoMethod.defaultAccountId;
@@ -642,14 +645,46 @@ export const ExternalSalesView: React.FC = () => {
     toast.success(`Cliente "${newCust.name}" cadastrado com sucesso!`, 'Cliente Salvo');
   };
 
-  // Finalizar Pedido ou Orçamento Mobile
-  const handleFinalizeExternalOrder = () => {
+  // Pré-finalizar Pedido ou Orçamento Mobile (Validação de campos obrigatórios e abertura da tela de confirmação)
+  const handlePreFinalizeExternalOrder = () => {
     if (cart.length === 0) {
       alert('Adicione itens antes de finalizar.');
       return;
     }
     if (!selectedCustomerId) {
       alert('Selecione ou cadastre um cliente para o pedido externo.');
+      return;
+    }
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+    if (!paymentTerm || paymentTerm.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
+      return;
+    }
+
+    setShowSaleConfirmationModal(true);
+  };
+
+  // Finalizar Pedido ou Orçamento Mobile (após confirmação na tela)
+  const handleFinalizeExternalOrder = () => {
+    setShowSaleConfirmationModal(false);
+
+    if (cart.length === 0) {
+      alert('Adicione itens antes de finalizar.');
+      return;
+    }
+    if (!selectedCustomerId) {
+      alert('Selecione ou cadastre um cliente para o pedido externo.');
+      return;
+    }
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+    if (!paymentTerm || paymentTerm.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
       return;
     }
 
@@ -749,7 +784,7 @@ export const ExternalSalesView: React.FC = () => {
         status: docType === 'orcamento' ? 'aberto' : 'concluido',
         validityDate:
           docType === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined,
-        notes: notes || `Pedido externo gerado via App Mobile por ${currentUser.name}`,
+        notes: (notes ? `${notes} | ` : '') + `Prazo: ${paymentTerm.replace(/_/g, ' ').toUpperCase()}${installments > 1 ? ` (${installments}x)` : ''}`,
         stockDeducted: docType === 'venda',
         financialGenerated: docType === 'venda',
         createdAt: nowIso,
@@ -2146,7 +2181,12 @@ export const ExternalSalesView: React.FC = () => {
           <div className="space-y-3 pt-3 border-t border-slate-100">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-extrabold text-slate-800 mb-1.5">Forma de Pagto:</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-extrabold text-slate-800">Forma de Pagto: *</label>
+                  <span className="text-[10px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    OBRIGATÓRIO
+                  </span>
+                </div>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as any)}
@@ -2158,6 +2198,29 @@ export const ExternalSalesView: React.FC = () => {
                   <option value="boleto">Boleto Bancário</option>
                 </select>
               </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-extrabold text-slate-800">Prazo de Pagto: *</label>
+                  <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    OBRIGATÓRIO
+                  </span>
+                </div>
+                <select
+                  value={paymentTerm}
+                  onChange={(e) => setPaymentTerm(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm sm:text-base font-bold text-slate-800 shadow-2xs"
+                >
+                  <option value="a_vista">À Vista / Imediato</option>
+                  <option value="15_dias">15 Dias Direto</option>
+                  <option value="30_dias">30 Dias Faturado</option>
+                  <option value="30_60_dias">30 / 60 Dias</option>
+                  <option value="30_60_90_dias">30 / 60 / 90 Dias</option>
+                  <option value="parcelado">Parcelado</option>
+                  <option value="personalizado">Personalizado</option>
+                </select>
+              </div>
+            </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5 gap-1 flex-wrap">
@@ -2241,7 +2304,6 @@ export const ExternalSalesView: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
 
             {paymentMethod === 'boleto' && (
               <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200 space-y-1.5">
@@ -2326,7 +2388,7 @@ export const ExternalSalesView: React.FC = () => {
           <button
             type="button"
             disabled={cart.length === 0 || !selectedCustomerId}
-            onClick={handleFinalizeExternalOrder}
+            onClick={handlePreFinalizeExternalOrder}
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-sm sm:text-base py-4 px-4 rounded-2xl shadow-lg shadow-emerald-950/20 flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-98"
           >
             <Send size={20} />
@@ -2590,6 +2652,23 @@ export const ExternalSalesView: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* MODAL: TELA DE CONFIRMAÇÃO DA VENDA (NOME DO CLIENTE, TOTAL, FORMA E PRAZO DE PAGTO) */}
+      <SaleConfirmationModal
+        isOpen={showSaleConfirmationModal}
+        onClose={() => setShowSaleConfirmationModal(false)}
+        onConfirm={handleFinalizeExternalOrder}
+        modality="Venda Mobile"
+        customerName={selectedCustomer ? selectedCustomer.name : 'Cliente Externo'}
+        customerDocument={selectedCustomer?.cpfCnpj}
+        customerPhone={selectedCustomer?.phone || selectedCustomer?.whatsapp}
+        totalAmount={cartTotal}
+        paymentMethod={paymentMethod || 'pix'}
+        paymentTerm={paymentTerm || 'a_vista'}
+        installments={installments}
+        itemsCount={cart.reduce((s, i) => s + i.quantity, 0)}
+        locationName={selectedLocationName}
+      />
 
       {/* Modal de Comprovante & Compartilhamento WhatsApp */}
       {finishedOrder && (

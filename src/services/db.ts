@@ -38,7 +38,13 @@ import {
   StateItem,
   CityItem,
   NeighborhoodItem,
+  StockControlConfig,
 } from '../types';
+
+export const DEFAULT_STOCK_CONTROL_CONFIG: StockControlConfig = {
+  enableStockControl: true,
+  allowNegativeStock: false,
+};
 
 export const DEFAULT_PRINTER_CONFIG: ThermalPrinterConfig = {
   paperWidth: '80mm',
@@ -96,6 +102,7 @@ export interface DatabaseState {
   auditLogs: AuditLog[];
   printerConfig?: ThermalPrinterConfig;
   hideOverdueAlert?: boolean;
+  stockControlConfig?: StockControlConfig;
   paymentMethods?: PaymentMethodRecord[];
   financialAccounts?: FinancialAccountRecord[];
   paymentTermsList?: PaymentTermRecord[];
@@ -1536,6 +1543,10 @@ export class Database {
             this.state.neighborhoods = [...DEFAULT_NEIGHBORHOODS];
             stateNeedsPersist = true;
           }
+          if (!this.state.stockControlConfig) {
+            this.state.stockControlConfig = { ...DEFAULT_STOCK_CONTROL_CONFIG };
+            stateNeedsPersist = true;
+          }
           if (this.state.customers && this.state.customers.length > 0) {
             this.state.customers = this.state.customers.map((c) => {
               if (!c.deliveryRouteId || !c.marketArea || !c.sellerName) {
@@ -2737,6 +2748,67 @@ export class Database {
     return hidden;
   }
 
+  // ==========================================
+  // CONFIGURAÇÃO DE CONTROLE DE ESTOQUE POR EMPRESA
+  // Permite ativar/desativar controle e vender com saldo negativo
+  // ==========================================
+  public static getStockControlConfig(): StockControlConfig {
+    const s = this.getState();
+    if (!s.stockControlConfig) {
+      s.stockControlConfig = { ...DEFAULT_STOCK_CONTROL_CONFIG };
+      this.persist();
+    }
+    return {
+      enableStockControl: s.stockControlConfig.enableStockControl !== false,
+      allowNegativeStock: !!s.stockControlConfig.allowNegativeStock,
+    };
+  }
+
+  public static updateStockControlConfig(config: Partial<StockControlConfig>): StockControlConfig {
+    const s = this.getState();
+    const current = this.getStockControlConfig();
+    const updated: StockControlConfig = {
+      ...current,
+      ...config,
+    };
+    s.stockControlConfig = updated;
+    this.addAuditLog(
+      'CONFIG_ESTOQUE_ATUALIZADA',
+      'ESTOQUE',
+      'CONFIG',
+      `Parâmetros de estoque: Controle ${updated.enableStockControl ? 'ATIVO' : 'DESATIVADO'}, Venda com estoque negativo ${updated.allowNegativeStock ? 'PERMITIDA' : 'BLOQUEADA'}`
+    );
+    this.persist();
+    this.notify();
+    return updated;
+  }
+
+  public static isStockControlEnabled(): boolean {
+    return this.getStockControlConfig().enableStockControl;
+  }
+
+  public static canSellNegativeStock(): boolean {
+    const cfg = this.getStockControlConfig();
+    return !cfg.enableStockControl || cfg.allowNegativeStock;
+  }
+
+  public static getStockLocations(companyId?: string): StockLocation[] {
+    const s = this.getState();
+    const locs = s.stockLocations || [];
+    if (!companyId) return locs;
+    return locs.filter((l) => l.companyId === companyId);
+  }
+
+  public static getStockBalances(companyId?: string): ProductStockBalance[] {
+    const s = this.getState();
+    const balances = s.stockBalances || [];
+    if (!companyId) return balances;
+    const companyLocIds = new Set(
+      (s.stockLocations || []).filter((l) => l.companyId === companyId).map((l) => l.id)
+    );
+    return balances.filter((b) => companyLocIds.has(b.locationId) || b.companyId === companyId);
+  }
+
   public static getSidebarMenuConfig(): SidebarMenuConfig {
     const s = this.getState();
     if (s.sidebarMenuConfig && Array.isArray(s.sidebarMenuConfig.hiddenSections)) {
@@ -3844,23 +3916,23 @@ export class Database {
       },
     ];
 
-    // Saldos por Local de Estoque
+    // Saldos por Local de Estoque (com vinculação explícita por empresa)
     const stockBalances: ProductStockBalance[] = [
       // Matérias-Primas no galpão MP
-      { productId: 'prod-comp-base', locationId: 'loc-mp', quantity: 240, reserved: 0, minStock: 50 },
-      { productId: 'prod-comp-essencia-lavanda', locationId: 'loc-mp', quantity: 18.5, reserved: 0, minStock: 5 },
-      { productId: 'prod-comp-corante-azul', locationId: 'loc-mp', quantity: 8.2, reserved: 0, minStock: 2 },
+      { productId: 'prod-comp-base', locationId: 'loc-mp', quantity: 240, reserved: 0, minStock: 50, companyId: companyMatrizId },
+      { productId: 'prod-comp-essencia-lavanda', locationId: 'loc-mp', quantity: 18.5, reserved: 0, minStock: 5, companyId: companyMatrizId },
+      { productId: 'prod-comp-corante-azul', locationId: 'loc-mp', quantity: 8.2, reserved: 0, minStock: 2, companyId: companyMatrizId },
       // Embalagens no estoque de embalagens
-      { productId: 'prod-emb-frasco-500', locationId: 'loc-embalagens', quantity: 850, reserved: 0, minStock: 200 },
-      { productId: 'prod-emb-tampa-flip', locationId: 'loc-embalagens', quantity: 920, reserved: 0, minStock: 200 },
-      { productId: 'prod-emb-galao-5l', locationId: 'loc-embalagens', quantity: 110, reserved: 0, minStock: 40 },
+      { productId: 'prod-emb-frasco-500', locationId: 'loc-embalagens', quantity: 850, reserved: 0, minStock: 200, companyId: companyMatrizId },
+      { productId: 'prod-emb-tampa-flip', locationId: 'loc-embalagens', quantity: 920, reserved: 0, minStock: 200, companyId: companyMatrizId },
+      { productId: 'prod-emb-galao-5l', locationId: 'loc-embalagens', quantity: 110, reserved: 0, minStock: 40, companyId: companyMatrizId },
       // Produtos Fabricados e Revenda no Estoque Comercial unificado
-      { productId: 'prod-detergente-500', locationId: 'loc-comercial', quantity: 245, reserved: 0, minStock: 60 },
-      { productId: 'prod-desinfetante-5l', locationId: 'loc-comercial', quantity: 57, reserved: 0, minStock: 20 },
-      { productId: 'prod-vassoura-piacava', locationId: 'loc-comercial', quantity: 38, reserved: 0, minStock: 15 },
-      { productId: 'prod-rodo-duplo', locationId: 'loc-comercial', quantity: 24, reserved: 0, minStock: 10 },
-      { productId: 'prod-luva-latex', locationId: 'loc-comercial', quantity: 72, reserved: 0, minStock: 20 },
-      { productId: 'prod-pano-microfibra', locationId: 'loc-comercial', quantity: 44, reserved: 0, minStock: 15 },
+      { productId: 'prod-detergente-500', locationId: 'loc-comercial', quantity: 245, reserved: 0, minStock: 60, companyId: companyMatrizId },
+      { productId: 'prod-desinfetante-5l', locationId: 'loc-comercial', quantity: 57, reserved: 0, minStock: 20, companyId: companyMatrizId },
+      { productId: 'prod-vassoura-piacava', locationId: 'loc-comercial', quantity: 38, reserved: 0, minStock: 15, companyId: companyMatrizId },
+      { productId: 'prod-rodo-duplo', locationId: 'loc-comercial', quantity: 24, reserved: 0, minStock: 10, companyId: companyMatrizId },
+      { productId: 'prod-luva-latex', locationId: 'loc-comercial', quantity: 72, reserved: 0, minStock: 20, companyId: companyMatrizId },
+      { productId: 'prod-pano-microfibra', locationId: 'loc-comercial', quantity: 44, reserved: 0, minStock: 15, companyId: companyMatrizId },
     ];
 
     // Clientes
@@ -4447,6 +4519,7 @@ export class Database {
       marketAreas: [...DEFAULT_MARKET_AREAS],
       cities: [...DEFAULT_CITIES],
       neighborhoods: [...DEFAULT_NEIGHBORHOODS],
+      stockControlConfig: { ...DEFAULT_STOCK_CONTROL_CONFIG },
     };
   }
 }

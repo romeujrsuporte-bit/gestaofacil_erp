@@ -53,6 +53,7 @@ import { Order, OrderType, OrderOrigin, OrderStatus, Product, Customer, OrderIte
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { ReceiptModal } from '../common/ReceiptModal';
+import { SaleConfirmationModal } from '../common/SaleConfirmationModal';
 import { EditOrderModal } from './EditOrderModal';
 import { toast } from '../../services/toast';
 
@@ -170,6 +171,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showSaleConfirmationModal, setShowSaleConfirmationModal] = useState(false);
   const [viewDetailsOrder, setViewDetailsOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
@@ -575,10 +577,49 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     alert(`Cliente "${newCust.name}" cadastrado com sucesso e selecionado no pedido!`);
   };
 
-  // FINALIZAR PEDIDO DE VENDA OU ORÇAMENTO COMERCIAL
-  const handleFinalizeOrder = () => {
+  // Pré-finalizar pedido (validação obrigatória de forma e prazo de pagamento e abertura da tela de confirmação)
+  const handlePreFinalizeOrder = () => {
     if (cart.length === 0) {
       alert('Adicione pelo menos um produto ao pedido antes de finalizar.');
+      return;
+    }
+
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+
+    if (!paymentTerms || paymentTerms.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
+      return;
+    }
+
+    if (orderDiscountVal > maxAllowedDiscountVal + 0.01) {
+      alert(
+        `Desconto não autorizado! Seu perfil permite no máximo ${currentUser.permissions.maxDiscountPercent}% (${formatCurrency(maxAllowedDiscountVal)}).`
+      );
+      return;
+    }
+
+    setShowSaleConfirmationModal(true);
+  };
+
+  // FINALIZAR PEDIDO DE VENDA OU ORÇAMENTO COMERCIAL (após confirmação na tela)
+  const handleFinalizeOrder = () => {
+    setShowSaleConfirmationModal(false);
+
+    if (cart.length === 0) {
+      alert('Adicione pelo menos um produto ao pedido antes de finalizar.');
+      return;
+    }
+
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+
+    if (!paymentTerms || paymentTerms.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
       return;
     }
 
@@ -753,6 +794,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       // Se qualquer modal estiver aberto, não aciona o atalho
       if (
         showReceiptModal ||
+        showSaleConfirmationModal ||
         showQuickCustomerModal ||
         showItemDiscountModal ||
         showNotesModal ||
@@ -767,7 +809,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       if (e.key === 'F10' || ((e.ctrlKey || e.metaKey) && e.key === 'Enter')) {
         e.preventDefault();
         if (cart.length > 0) {
-          handleFinalizeOrder();
+          handlePreFinalizeOrder();
         } else {
           toast.error('Adicione ao menos um produto no pedido antes de finalizar.');
         }
@@ -779,13 +821,15 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   }, [
     cart,
     showReceiptModal,
+    showSaleConfirmationModal,
     showQuickCustomerModal,
     showItemDiscountModal,
     showNotesModal,
     viewDetailsOrder,
     editingOrder,
     activeTab,
-    handleFinalizeOrder
+    paymentMethod,
+    paymentTerms
   ]);
 
   // CONVERTER ORÇAMENTO EM VENDA (No histórico)
@@ -1776,9 +1820,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                      Prazo / Faturamento:
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        Prazo de Pagto: *
+                      </label>
+                      <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                        OBRIGATÓRIO
+                      </span>
+                    </div>
                     <select
                       value={paymentTerms}
                       onChange={(e) => setPaymentTerms(e.target.value)}
@@ -1789,14 +1838,20 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                       <option value="30_dias">30 Dias Faturado</option>
                       <option value="30_60_dias">30 / 60 Dias</option>
                       <option value="30_60_90_dias">30 / 60 / 90 Dias</option>
+                      <option value="parcelado">Parcelado</option>
                       <option value="personalizado">Personalizado</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                      Meio de Pagamento:
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        Forma de Pagto: *
+                      </label>
+                      <span className="text-[9px] font-black text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                        OBRIGATÓRIO
+                      </span>
+                    </div>
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value as any)}
@@ -1943,7 +1998,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 <button
                   type="button"
                   disabled={cart.length === 0}
-                  onClick={handleFinalizeOrder}
+                  onClick={handlePreFinalizeOrder}
                   className={`w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm text-white flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-40 ${
                     docType === 'venda'
                       ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40'
@@ -2626,6 +2681,23 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           }}
         />
       )}
+
+      {/* MODAL: TELA DE CONFIRMAÇÃO DA VENDA (NOME DO CLIENTE, TOTAL, FORMA E PRAZO DE PAGTO) */}
+      <SaleConfirmationModal
+        isOpen={showSaleConfirmationModal}
+        onClose={() => setShowSaleConfirmationModal(false)}
+        onConfirm={handleFinalizeOrder}
+        modality={docType === 'venda' ? 'Pedido de Venda' : 'Pedido de Venda'}
+        customerName={selectedCustomer ? selectedCustomer.name : 'Consumidor Final (Não Identificado)'}
+        customerDocument={selectedCustomer?.cpfCnpj}
+        customerPhone={selectedCustomer?.phone || selectedCustomer?.whatsapp}
+        totalAmount={orderTotal}
+        paymentMethod={paymentMethod || 'pix'}
+        paymentTerm={paymentTerms || 'a_vista'}
+        installments={installments}
+        itemsCount={cart.reduce((s, i) => s + i.quantity, 0)}
+        locationName={selectedLocationName}
+      />
 
       {/* MODAL: COMPROVANTE TÉRMICO / WHATSAPP */}
       {selectedOrder && (

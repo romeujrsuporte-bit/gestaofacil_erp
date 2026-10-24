@@ -1764,6 +1764,166 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'empres
                   </span>
                 </div>
               </div>
+
+              {/* CARD: POLÍTICA DE CONTROLE DE ESTOQUE POR EMPRESA & VENDA COM ESTOQUE NEGATIVO */}
+              {(() => {
+                const stockConfig = Database.getStockControlConfig();
+                const canSellNegative = Database.canSellNegativeStock();
+                const totalNegativeProducts = dbState.stockBalances.filter((b) => b.quantity < 0).length;
+
+                const handleToggleStockControl = () => {
+                  const nextVal = !stockConfig.enableStockControl;
+                  const updated = Database.updateStockControlConfig({ enableStockControl: nextVal });
+                  setDbState({ ...Database.getState() });
+                  const msg = nextVal
+                    ? 'Controle de estoque ATIVADO no sistema.'
+                    : 'Controle de estoque DESATIVADO. Vendas com saldo zerado/negativo estão permitidas livremente.';
+                  setPrefSaveMsg(msg);
+                  toast.success(msg, 'Controle de Estoque');
+                };
+
+                const handleToggleAllowNegativeStock = () => {
+                  const nextVal = !stockConfig.allowNegativeStock;
+                  const updated = Database.updateStockControlConfig({ allowNegativeStock: nextVal });
+                  setDbState({ ...Database.getState() });
+                  const msg = nextVal
+                    ? 'Permissão de venda com estoque negativo HABILITADA. O PDV e pedidos não serão bloqueados por falta de saldo.'
+                    : 'Venda com estoque negativo BLOQUEADA. O sistema exigirá saldo físico para concluir saídas e vendas.';
+                  setPrefSaveMsg(msg);
+                  toast.success(msg, 'Política de Estoque Negativo');
+                };
+
+                return (
+                  <div
+                    className={`p-5 rounded-2xl border-2 transition-all ${
+                      canSellNegative
+                        ? 'bg-gradient-to-br from-amber-50/60 via-white to-slate-50 border-amber-200 shadow-xs'
+                        : 'bg-gradient-to-br from-emerald-50/60 via-white to-slate-50 border-emerald-200 shadow-xs'
+                    }`}
+                  >
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                      <div className="flex items-start gap-3.5">
+                        <div
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+                            canSellNegative
+                              ? 'bg-amber-500 text-white'
+                              : 'bg-emerald-600 text-white'
+                          }`}
+                        >
+                          <Boxes size={24} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                              Gestão de Estoque
+                            </span>
+                            <span
+                              className={`text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                                stockConfig.enableStockControl
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  : 'bg-slate-100 text-slate-700 border-slate-300'
+                              }`}
+                            >
+                              <Warehouse size={12} />
+                              <span>{stockConfig.enableStockControl ? 'Controle de Estoque Ativo' : 'Controle Desativado'}</span>
+                            </span>
+                            <span
+                              className={`text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                                canSellNegative
+                                  ? 'bg-amber-100 text-amber-900 border-amber-300 font-extrabold'
+                                  : 'bg-blue-100 text-blue-900 border-blue-300'
+                              }`}
+                            >
+                              <CheckCircle2 size={12} />
+                              <span>{canSellNegative ? 'Venda com Estoque Negativo: LIBERADA' : 'Venda Negativa: BLOQUEADA'}</span>
+                            </span>
+                          </div>
+
+                          <h4 className="text-sm sm:text-base font-extrabold text-slate-800">
+                            Controle de Estoque & Permissão de Vendas com Estoque Negativo
+                          </h4>
+                          <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                            Configure se o sistema deve controlar o estoque e se é permitido realizar vendas de produtos
+                            com saldo zerado ou insuficiente no PDV Balcão, Pedido de Venda e Venda Mobile.
+                            Quando a venda com estoque negativo está habilitada, a venda é finalizada normalmente e o saldo
+                            fica negativo até que nova compra, produção ou ajuste alimente o estoque da respectiva empresa.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Botões de Ação */}
+                      <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleToggleStockControl}
+                          className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer ${
+                            stockConfig.enableStockControl
+                              ? 'bg-slate-800 hover:bg-slate-700 text-white'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          }`}
+                        >
+                          <span>{stockConfig.enableStockControl ? 'Desativar Controle de Estoque' : 'Ativar Controle de Estoque'}</span>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-white/20">
+                            {stockConfig.enableStockControl ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleToggleAllowNegativeStock}
+                          className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer ${
+                            stockConfig.allowNegativeStock
+                              ? 'bg-rose-700 hover:bg-rose-600 text-white'
+                              : 'bg-amber-600 hover:bg-amber-500 text-white'
+                          }`}
+                        >
+                          <span>{stockConfig.allowNegativeStock ? 'Bloquear Venda com Estoque Negativo' : 'Permitir Venda com Estoque Negativo'}</span>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-white/20">
+                            {stockConfig.allowNegativeStock ? 'Liberado' : 'Bloqueado'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Resumo e Indicadores do Estoque */}
+                    <div className="mt-4 pt-4 border-t border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-white p-3 rounded-xl border border-slate-200">
+                        <span className="text-[11px] text-slate-500 font-semibold uppercase">Modo Operacional</span>
+                        <p className={`text-sm font-extrabold mt-0.5 ${canSellNegative ? 'text-amber-700' : 'text-emerald-700'}`}>
+                          {canSellNegative ? 'Vendas Contínuas (Sem Travar)' : 'Rigoroso (Exige Saldo Físico)'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {canSellNegative
+                            ? 'Vendedores podem emitir pedidos mesmo sem estoque disponível'
+                            : 'Vendas são bloqueadas caso o produto não tenha saldo no local'}
+                        </p>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-xl border border-slate-200">
+                        <span className="text-[11px] text-slate-500 font-semibold uppercase">Alimentação por Empresa</span>
+                        <p className="text-sm font-extrabold text-indigo-700 mt-0.5">
+                          {dbState.companies.length} Empresa{dbState.companies.length === 1 ? '' : 's'} Configurada{dbState.companies.length === 1 ? '' : 's'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          Compras, inventários e produção exigem seleção da empresa para alimentar estoque
+                        </p>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-xl border border-slate-200">
+                        <span className="text-[11px] text-slate-500 font-semibold uppercase">Itens com Saldo Negativo</span>
+                        <p className={`text-sm font-extrabold mt-0.5 ${totalNegativeProducts > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+                          {totalNegativeProducts} registro{totalNegativeProducts === 1 ? '' : 's'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {totalNegativeProducts > 0
+                            ? 'Produtos com saldo negativo aguardando reposição'
+                            : 'Nenhum saldo negativo registrado no momento'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         );

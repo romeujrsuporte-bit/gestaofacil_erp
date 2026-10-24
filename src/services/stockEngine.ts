@@ -60,23 +60,34 @@ export class StockEngine {
   }
 
   /**
-   * Obtém a soma total do saldo físico e disponível de um produto em todos os locais
+   * Obtém a soma total do saldo físico e disponível de um produto em todos os locais (ou filtrado por empresa)
    * Se for Embalagem Master, reflete proporcionalmente a disponibilidade do produto associado
    */
   public static getTotalProductStock(
     balances: ProductStockBalance[],
     productId: string,
-    productsList?: Product[]
+    productsList?: Product[],
+    companyId?: string
   ): { physical: number; reserved: number; available: number } {
     const products = productsList || Database?.getState?.()?.products || [];
     const prod = products.find((p) => p.id === productId);
 
+    // Se houver filtro de empresa, filtra apenas depósitos dessa empresa
+    let effectiveBalances = balances;
+    if (companyId) {
+      const stateLocs = Database?.getState?.()?.stockLocations || [];
+      const companyLocIds = new Set(stateLocs.filter((l) => l.companyId === companyId).map((l) => l.id));
+      effectiveBalances = balances.filter(
+        (b) => companyLocIds.has(b.locationId) || (b.companyId && b.companyId === companyId)
+      );
+    }
+
     // Se for Embalagem Master vinculada a produto unitário
     if (prod?.isMasterPack && prod.masterPackAssociatedProductId && (prod.masterPackUnits || 1) > 0) {
       const multiplier = prod.masterPackUnits || 1;
-      const assocStock = this.getTotalProductStock(balances, prod.masterPackAssociatedProductId, products);
+      const assocStock = this.getTotalProductStock(effectiveBalances, prod.masterPackAssociatedProductId, products, companyId);
       
-      const directBalances = balances.filter((b) => b.productId === productId);
+      const directBalances = effectiveBalances.filter((b) => b.productId === productId);
       const directPhysical = directBalances.reduce((sum, b) => sum + (b.quantity || 0), 0);
       const directReserved = directBalances.reduce((sum, b) => sum + (b.reserved || 0), 0);
 
@@ -91,10 +102,10 @@ export class StockEngine {
       };
     }
 
-    const productBalances = balances.filter((b) => b.productId === productId);
+    const productBalances = effectiveBalances.filter((b) => b.productId === productId);
     const physical = productBalances.reduce((sum, b) => sum + (b.quantity || 0), 0);
     const reserved = productBalances.reduce((sum, b) => sum + (b.reserved || 0), 0);
-    const available = Math.max(0, physical - reserved);
+    const available = physical - reserved; // Mantém saldo negativo visível se o estoque estiver negativo
     return { physical, reserved, available };
   }
 
@@ -153,6 +164,12 @@ export class StockEngine {
 
     let updatedBalances = [...currentBalances];
 
+    // Política de permitir estoque negativo configurada no sistema ou passada nas opções
+    const allowNegative =
+      options?.allowNegativeStock !== undefined
+        ? options.allowNegativeStock
+        : Database.canSellNegativeStock();
+
     const updateItemBalance = (prodId: string, locId: string, deltaQty: number) => {
       const idx = updatedBalances.findIndex(
         (b) => b.productId === prodId && b.locationId === locId
@@ -160,7 +177,7 @@ export class StockEngine {
       if (idx >= 0) {
         const current = updatedBalances[idx];
         const newQty = (current.quantity || 0) + deltaQty;
-        if (newQty < 0 && !options?.allowNegativeStock) {
+        if (newQty < 0 && !allowNegative) {
           if (isMaster) {
             const availPacks = Math.floor(current.quantity / multiplier);
             throw new Error(
@@ -174,9 +191,10 @@ export class StockEngine {
         updatedBalances[idx] = {
           ...current,
           quantity: newQty,
+          companyId: current.companyId || movement.companyId,
         };
       } else {
-        if (deltaQty < 0 && !options?.allowNegativeStock) {
+        if (deltaQty < 0 && !allowNegative) {
           if (isMaster) {
             throw new Error(
               `Estoque insuficiente. O produto unitário associado "${associatedProduct?.description}" possui saldo 0 no local selecionado.`
@@ -189,9 +207,10 @@ export class StockEngine {
         updatedBalances.push({
           productId: prodId,
           locationId: locId,
-          quantity: Math.max(0, deltaQty),
+          quantity: deltaQty,
           reserved: 0,
           minStock: 0,
+          companyId: movement.companyId,
         });
       }
     };
@@ -270,9 +289,9 @@ export class StockEngine {
       notes: notes || `Transferência para ${destLocation.name}`,
     });
 
-    // 2. Entrada no Destino
+    // 2. Entrada no Destino (utiliza a empresa do local de destino se for transferência inter-empresas)
     const enterRes = this.applyMovement(exitRes.updatedBalances, {
-      companyId,
+      companyId: destLocation.companyId || companyId,
       productId: product.id,
       productCode: product.code,
       productDescription: product.description,

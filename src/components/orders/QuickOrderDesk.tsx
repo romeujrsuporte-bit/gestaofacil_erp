@@ -28,6 +28,7 @@ import { Product, Customer, Order, OrderItem } from '../../types';
 import { StockEngine } from '../../services/stockEngine';
 import { formatCurrency, formatQuantity } from '../../services/pricingEngine';
 import { ReceiptModal } from '../common/ReceiptModal';
+import { SaleConfirmationModal } from '../common/SaleConfirmationModal';
 import { toast } from '../../services/toast';
 
 interface QuickOrderDeskProps {
@@ -75,6 +76,8 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
 
   // Forma de Pagamento & Parcelas
   const [paymentMethod, setPaymentMethod] = useState<Order['paymentMethod']>('pix');
+  const [paymentTerm, setPaymentTerm] = useState<string>('a_vista');
+  const [showSaleConfirmationModal, setShowSaleConfirmationModal] = useState<boolean>(false);
   const [selectedBoletoAccountId, setSelectedBoletoAccountId] = useState<string>(() => {
     const boletoMethod = Database.getPaymentMethods().find((m) => m.type === 'boleto');
     if (boletoMethod?.defaultAccountId) return boletoMethod.defaultAccountId;
@@ -353,12 +356,39 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
     setNewCustCity('');
   };
 
-  // ==========================================
-  // FINALIZAR PEDIDO DE VENDA OU ORÇAMENTO
-  // ==========================================
-  const handleFinalizeOrder = () => {
+  // Pré-finalizar pedido (validação de forma e prazo de pagamento obrigatórios e abertura da tela de confirmação)
+  const handlePreFinalizeOrder = () => {
     if (cart.length === 0) {
       alert('Adicione pelo menos 1 produto ao pedido.');
+      return;
+    }
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+    if (!paymentTerm || paymentTerm.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
+      return;
+    }
+    setShowSaleConfirmationModal(true);
+  };
+
+  // ==========================================
+  // FINALIZAR PEDIDO DE VENDA OU ORÇAMENTO (após confirmação na tela)
+  // ==========================================
+  const handleFinalizeOrder = () => {
+    setShowSaleConfirmationModal(false);
+
+    if (cart.length === 0) {
+      alert('Adicione pelo menos 1 produto ao pedido.');
+      return;
+    }
+    if (!paymentMethod) {
+      alert('A Forma de Pagamento é obrigatória em todas as modalidades de venda.');
+      return;
+    }
+    if (!paymentTerm || paymentTerm.trim() === '') {
+      alert('O Prazo de Pagamento é obrigatório em todas as modalidades de venda.');
       return;
     }
 
@@ -861,7 +891,12 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
           {/* Forma de Pagamento */}
           <div>
-            <label className="block text-slate-600 font-semibold mb-1">Forma de Pagto:</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-slate-700 font-bold">Forma de Pagto: *</label>
+              <span className="text-[9px] font-black text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                OBRIGATÓRIO
+              </span>
+            </div>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as any)}
@@ -871,6 +906,29 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
               <option value="dinheiro">Dinheiro</option>
               <option value="cartao_credito">Cartão de Crédito</option>
               <option value="boleto">Boleto Bancário</option>
+            </select>
+          </div>
+
+          {/* Prazo de Pagamento */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-slate-700 font-bold">Prazo de Pagto: *</label>
+              <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                OBRIGATÓRIO
+              </span>
+            </div>
+            <select
+              value={paymentTerm}
+              onChange={(e) => setPaymentTerm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-medium text-slate-800 focus:outline-hidden"
+            >
+              <option value="a_vista">À Vista / Imediato</option>
+              <option value="15_dias">15 Dias Direto</option>
+              <option value="30_dias">30 Dias Faturado</option>
+              <option value="30_60_dias">30 / 60 Dias</option>
+              <option value="30_60_90_dias">30 / 60 / 90 Dias</option>
+              <option value="parcelado">Parcelado</option>
+              <option value="personalizado">Personalizado</option>
             </select>
           </div>
 
@@ -1029,7 +1087,7 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
       <button
         type="button"
         disabled={cart.length === 0}
-        onClick={handleFinalizeOrder}
+        onClick={handlePreFinalizeOrder}
         className={`w-full py-3.5 rounded-xl font-black text-sm text-white shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer ${
           cart.length === 0
             ? 'bg-slate-300 opacity-60 cursor-not-allowed'
@@ -1206,6 +1264,22 @@ export const QuickOrderDesk: React.FC<QuickOrderDeskProps> = ({
           </div>
         </div>
       )}
+
+      {/* MODAL: TELA DE CONFIRMAÇÃO DA VENDA (NOME DO CLIENTE, TOTAL, FORMA E PRAZO DE PAGTO) */}
+      <SaleConfirmationModal
+        isOpen={showSaleConfirmationModal}
+        onClose={() => setShowSaleConfirmationModal(false)}
+        onConfirm={handleFinalizeOrder}
+        modality="Pedido de Venda"
+        customerName={selectedCustomer ? selectedCustomer.name : 'Consumidor Final (Não Identificado)'}
+        customerDocument={selectedCustomer?.cpfCnpj}
+        customerPhone={selectedCustomer?.whatsapp || selectedCustomer?.phone}
+        totalAmount={orderFinalTotal}
+        paymentMethod={paymentMethod || 'pix'}
+        paymentTerm={paymentTerm || 'a_vista'}
+        installments={installments}
+        itemsCount={cart.reduce((s, i) => s + i.quantity, 0)}
+      />
 
       {/* Modal de Comprovante / Recibo do Pedido */}
       {showReceiptModal && completedOrder && (

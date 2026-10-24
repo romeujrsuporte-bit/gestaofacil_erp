@@ -147,6 +147,7 @@ export interface ProductStockBalance {
   quantity: number;
   reserved: number;
   minStock: number;
+  companyId?: string;
 }
 
 export type MovementType = 
@@ -831,4 +832,10 @@ export interface NeighborhoodItem {
   createdAt: string;
   updatedAt?: string;
 }
+
+export interface StockControlConfig {
+  enableStockControl: boolean; // Se ativado, o sistema gerencia o estoque; se desativado, permite vender livremente
+  allowNegativeStock: boolean; // Se ativado, permite concluir vendas no PDV, Pedido e Mobile mesmo com estoque negativo/zerado
+}
+
 
